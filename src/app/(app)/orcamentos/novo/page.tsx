@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { PlusCircle, Trash2, FileText, Share2, TicketPercent, DollarSign, NotebookText } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,8 +24,20 @@ type ItemRow = ItemOrcamento & { id: string };
 type BudgetType = "items" | "group";
 
 export default function NovoOrcamentoPage() {
+  return (
+    <Suspense fallback={<p className="text-sm text-muted-foreground">Carregando…</p>}>
+      <NovoOrcamentoForm />
+    </Suspense>
+  );
+}
+
+function NovoOrcamentoForm() {
   const router = useRouter();
   const supabase = createClient();
+  const searchParams = useSearchParams();
+  const orcamentoId = searchParams.get("id");
+  const isEdit = Boolean(orcamentoId);
+  const [numero, setNumero] = useState<string | null>(null);
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
@@ -58,15 +70,37 @@ export default function NovoOrcamentoPage() {
       supabase.from("clientes").select("*").order("nome"),
       supabase.from("vendedores").select("*").order("nome"),
       supabase.from("planos_pagamento").select("*").order("nome"),
-    ]).then(([c, v, p]) => {
+      orcamentoId
+        ? supabase.from("orcamentos").select("*").eq("id", orcamentoId).single()
+        : Promise.resolve({ data: null }),
+    ]).then(([c, v, p, o]) => {
       setClientes(c.data ?? []);
       setVendedores(v.data ?? []);
       setPlanos(p.data ?? []);
-      setClienteId(c.data?.[0]?.id ?? "");
-      setVendedorId(v.data?.[0]?.id ?? "");
+
+      if (o.data) {
+        const orc = o.data;
+        setNumero(orc.numero);
+        setClienteId(orc.cliente_id ?? "");
+        setVendedorId(orc.vendedor_id ?? "");
+        setBudgetType(orc.budget_type);
+        setItems((orc.itens ?? []).map((it: ItemOrcamento) => ({ ...it, id: crypto.randomUUID() })));
+        setGroupQuantity(orc.group_quantity ?? 1);
+        setGroupUnitPrice(orc.group_unit_price ?? 0);
+        setGroupUnitPriceInput(orc.group_unit_price ? formatBRL(orc.group_unit_price) : "");
+        setDesconto(orc.desconto);
+        setDescontoInput(orc.desconto > 0 ? formatBRL(orc.desconto) : "");
+        setObservacao(orc.observacao ?? "");
+        const plano = p.data?.find(pl => pl.nome === orc.plano);
+        setPlanoId(plano?.id ?? "");
+        setInstallmentsCount(orc.installments_count ?? 1);
+      } else {
+        setClienteId(c.data?.[0]?.id ?? "");
+        setVendedorId(v.data?.[0]?.id ?? "");
+      }
       setLoading(false);
     });
-  }, [supabase]);
+  }, [supabase, orcamentoId]);
 
   const planoSelecionado = useMemo(() => planos.find(p => p.id === planoId), [planos, planoId]);
 
@@ -111,21 +145,26 @@ export default function NovoOrcamentoPage() {
     }
 
     setSaving(true);
-    const numero = `ORC-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
-    const { data, error } = await supabase.from("orcamentos").insert({
-      numero,
+    const payload = {
       cliente_id: cliente.id, cliente_nome: cliente.nome,
       vendedor_id: vendedor.id, vendedor_nome: vendedor.nome,
-      total, desconto, status: "pendente",
-      data: new Date().toISOString().slice(0, 10),
+      total, desconto, status: "pendente" as const,
       plano: planoSelecionado?.nome ?? null,
-      itens: budgetType === "items" ? items.map(({ descricao, qtd, valor }) => ({ descricao, qtd, valor })) : [],
+      itens: items.map(({ descricao, qtd, valor }) => ({ descricao, qtd, valor })),
       budget_type: budgetType,
       group_unit_price: budgetType === "group" ? groupUnitPrice : null,
       group_quantity: budgetType === "group" ? groupQuantity : null,
       observacao: observacao || null,
       installments_count: planoSelecionado && planoSelecionado.parcelas > 1 ? installmentsCount : null,
-    }).select().single();
+    };
+
+    const { data, error } = isEdit
+      ? await supabase.from("orcamentos").update(payload).eq("id", orcamentoId!).select().single()
+      : await supabase.from("orcamentos").insert({
+          ...payload,
+          numero: `ORC-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`,
+          data: new Date().toISOString().slice(0, 10),
+        }).select().single();
     setSaving(false);
 
     if (error) { toast.error("Erro ao salvar orçamento", { description: error.message }); return; }
@@ -137,18 +176,18 @@ export default function NovoOrcamentoPage() {
       } else {
         toast.error("Número do WhatsApp não encontrado", { description: "O vendedor selecionado não possui WhatsApp cadastrado." });
       }
-    } else if (after === "pdf") {
-      toast.success("PDF gerado");
     }
 
-    toast.success("Orçamento criado", { description: `Orçamento ${data.numero} foi salvo com sucesso.` });
-    router.push("/orcamentos");
+    toast.success(isEdit ? "Orçamento atualizado" : "Orçamento criado", { description: `Orçamento ${data.numero} foi salvo com sucesso.` });
+
+    if (after === "pdf") router.push(`/orcamentos/${data.id}/imprimir`);
+    else router.push("/orcamentos");
   };
 
   if (loading) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Criar Novo Orçamento" />
+        <PageHeader title={isEdit ? "Editar Orçamento" : "Criar Novo Orçamento"} />
         <p className="text-sm text-muted-foreground">Carregando…</p>
       </div>
     );
@@ -156,7 +195,7 @@ export default function NovoOrcamentoPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Criar Novo Orçamento" />
+      <PageHeader title={isEdit ? `Editar Orçamento${numero ? ` · ${numero}` : ""}` : "Criar Novo Orçamento"} />
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card className="lg:col-span-1">
           <CardHeader>
@@ -340,7 +379,7 @@ export default function NovoOrcamentoPage() {
           </CardContent>
           <CardFooter className="gap-2 border-t pt-6 flex-wrap">
             <Button disabled={saving} onClick={() => handleSave()} className="flex-1 gap-2 bg-primary hover:bg-[var(--primary-hover)]">
-              <FileText className="h-4 w-4" />{saving ? "Salvando…" : "Salvar Orçamento"}
+              <FileText className="h-4 w-4" />{saving ? "Salvando…" : isEdit ? "Salvar Alterações" : "Salvar Orçamento"}
             </Button>
             <Button disabled={saving} onClick={() => handleSave("pdf")} variant="outline" className="flex-1 gap-2">
               <FileText className="h-4 w-4" />Salvar e Gerar PDF

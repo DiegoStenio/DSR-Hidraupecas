@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, FileText, Send, Download, Trash2, Search } from "lucide-react";
+import { Plus, FileText, Send, Download, Pencil, Trash2, Search } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +45,17 @@ export default function OrcamentosPage() {
     if (error) { toast.error("Erro ao excluir", { description: error.message }); return; }
     setList(l => l.filter(x => x.id !== id));
     toast.success("Excluído");
+  };
+
+  const handleSendWhatsapp = async (o: Orcamento) => {
+    if (!o.vendedor_id) { toast.error("Vendedor não vinculado a este orçamento."); return; }
+    const { data: vendedor } = await supabase.from("vendedores").select("*").eq("id", o.vendedor_id).single();
+    if (!vendedor?.whatsapp) {
+      toast.error("Número do WhatsApp não encontrado", { description: "O vendedor selecionado não possui WhatsApp cadastrado." });
+      return;
+    }
+    const message = encodeURIComponent(`Olá ${o.cliente_nome}, aqui está seu orçamento #${o.numero} com um total de ${fmt(o.total)}. Por favor me avise se tiver alguma dúvida.`);
+    window.open(`https://wa.me/${vendedor.whatsapp.replace(/\D/g, "")}?text=${message}`, "_blank");
   };
 
   return (
@@ -118,10 +129,13 @@ export default function OrcamentosPage() {
                       }`}>{o.status}</span>
                     </td>
                     <td className="px-5 py-4 text-right">
-                      <Button size="icon" variant="ghost" onClick={() => toast.success("PDF gerado")}>
-                        <Download className="h-4 w-4" />
+                      <Button size="icon" variant="ghost" asChild>
+                        <Link href={`/orcamentos/novo?id=${o.id}`}><Pencil className="h-4 w-4" /></Link>
                       </Button>
-                      <Button size="icon" variant="ghost" onClick={() => toast.success("Enviado via WhatsApp")} className="text-emerald-600">
+                      <Button size="icon" variant="ghost" asChild>
+                        <Link href={`/orcamentos/${o.id}/imprimir`}><Download className="h-4 w-4" /></Link>
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => handleSendWhatsapp(o)} className="text-emerald-600">
                         <Send className="h-4 w-4" />
                       </Button>
                       <Button size="icon" variant="ghost" onClick={() => handleDelete(o.id)} className="text-destructive">
@@ -150,8 +164,13 @@ export default function OrcamentosPage() {
                 <div className="mt-3 flex items-center justify-between">
                   <div className="font-display text-xl font-semibold">{fmt(o.total)}</div>
                   <div className="flex gap-1">
-                    <Button size="icon" variant="ghost" onClick={() => toast.success("PDF gerado")}><Download className="h-4 w-4" /></Button>
-                    <Button size="icon" variant="ghost" onClick={() => toast.success("Enviado")} className="text-emerald-600"><Send className="h-4 w-4" /></Button>
+                    <Button size="icon" variant="ghost" asChild>
+                      <Link href={`/orcamentos/novo?id=${o.id}`}><Pencil className="h-4 w-4" /></Link>
+                    </Button>
+                    <Button size="icon" variant="ghost" asChild>
+                      <Link href={`/orcamentos/${o.id}/imprimir`}><Download className="h-4 w-4" /></Link>
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={() => handleSendWhatsapp(o)} className="text-emerald-600"><Send className="h-4 w-4" /></Button>
                   </div>
                 </div>
               </div>
