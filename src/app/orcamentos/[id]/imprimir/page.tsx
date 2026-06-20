@@ -136,10 +136,14 @@ export default function ImprimirOrcamentoPage() {
               <p className="font-semibold">{orcamento.cliente_nome}</p>
               {cliente && (
                 <>
+                  {cliente.nome_fantasia && <p>{cliente.nome_fantasia}</p>}
                   <p>{cliente.tipo === "PJ" ? "CNPJ" : "CPF"}: {cliente.documento}</p>
+                  {cliente.ie_rg && <p>{cliente.tipo === "PJ" ? "IE" : "RG"}: {cliente.ie_rg}</p>}
                   {cliente.telefone && <p>Tel: {cliente.telefone}</p>}
                   {cliente.email && <p>Email: {cliente.email}</p>}
-                  {(cliente.cidade || cliente.estado) && <p>End: {[cliente.cidade, cliente.estado].filter(Boolean).join(", ")}</p>}
+                  {[cliente.logradouro, cliente.numero, cliente.bairro, cliente.cidade, cliente.estado, cliente.cep].some(Boolean) && (
+                    <p>End: {[cliente.logradouro, cliente.numero, cliente.bairro, cliente.cidade, cliente.estado, cliente.cep].filter(Boolean).join(", ")}</p>
+                  )}
                 </>
               )}
             </div>

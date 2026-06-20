@@ -24,16 +24,23 @@ type ClienteForm = {
   id?: string;
   tipo: "PF" | "PJ";
   nome: string;
+  nome_fantasia: string;
   documento: string;
+  ie_rg: string;
   telefone: string;
   email: string;
+  cep: string;
+  logradouro: string;
+  numero: string;
+  bairro: string;
   cidade: string;
   estado: string;
   observacoes: string;
 };
 
 const emptyForm: ClienteForm = {
-  tipo: "PJ", nome: "", documento: "", telefone: "", email: "", cidade: "", estado: "", observacoes: "",
+  tipo: "PJ", nome: "", nome_fantasia: "", documento: "", ie_rg: "", telefone: "", email: "",
+  cep: "", logradouro: "", numero: "", bairro: "", cidade: "", estado: "", observacoes: "",
 };
 
 export default function ClientesPage() {
@@ -68,19 +75,20 @@ export default function ClientesPage() {
   }, [list, q]);
 
   const handleSave = async (form: ClienteForm) => {
+    const payload = {
+      tipo: form.tipo, nome: form.nome, nome_fantasia: form.nome_fantasia || null,
+      documento: form.documento, ie_rg: form.ie_rg || null, telefone: form.telefone,
+      email: form.email, cep: form.cep || null, logradouro: form.logradouro || null,
+      numero: form.numero || null, bairro: form.bairro || null, cidade: form.cidade, estado: form.estado,
+      observacoes: form.observacoes,
+    };
     if (form.id) {
-      const { data, error } = await supabase.from("clientes").update({
-        tipo: form.tipo, nome: form.nome, documento: form.documento, telefone: form.telefone,
-        email: form.email, cidade: form.cidade, estado: form.estado, observacoes: form.observacoes,
-      }).eq("id", form.id).select().single();
+      const { data, error } = await supabase.from("clientes").update(payload).eq("id", form.id).select().single();
       if (error) { toast.error("Erro ao atualizar", { description: error.message }); return; }
       setList(l => l.map(x => x.id === form.id ? data : x));
       toast.success("Cliente atualizado");
     } else {
-      const { data, error } = await supabase.from("clientes").insert({
-        tipo: form.tipo, nome: form.nome, documento: form.documento, telefone: form.telefone,
-        email: form.email, cidade: form.cidade, estado: form.estado, observacoes: form.observacoes,
-      }).select().single();
+      const { data, error } = await supabase.from("clientes").insert(payload).select().single();
       if (error) { toast.error("Erro ao criar", { description: error.message }); return; }
       setList(l => [data, ...l]);
       toast.success("Cliente criado");
@@ -148,7 +156,7 @@ export default function ClientesPage() {
                         </div>
                         <div className="min-w-0">
                           <div className="font-medium text-foreground truncate">{c.nome}</div>
-                          <div className="text-xs text-muted-foreground">{c.email}</div>
+                          <div className="text-xs text-muted-foreground truncate">{c.nome_fantasia || c.email}</div>
                         </div>
                       </div>
                     </td>
@@ -243,8 +251,11 @@ function ClienteFormDialog({
   useEffect(() => {
     if (cliente) {
       setForm({
-        id: cliente.id, tipo: cliente.tipo, nome: cliente.nome, documento: cliente.documento,
-        telefone: cliente.telefone ?? "", email: cliente.email ?? "", cidade: cliente.cidade ?? "",
+        id: cliente.id, tipo: cliente.tipo, nome: cliente.nome, nome_fantasia: cliente.nome_fantasia ?? "",
+        documento: cliente.documento, ie_rg: cliente.ie_rg ?? "",
+        telefone: cliente.telefone ?? "", email: cliente.email ?? "",
+        cep: cliente.cep ?? "", logradouro: cliente.logradouro ?? "", numero: cliente.numero ?? "",
+        bairro: cliente.bairro ?? "", cidade: cliente.cidade ?? "",
         estado: cliente.estado ?? "", observacoes: cliente.observacoes ?? "",
       });
     } else if (open) {
@@ -254,7 +265,7 @@ function ClienteFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{cliente ? "Editar cliente" : "Novo cliente"}</DialogTitle>
           <DialogDescription>Preencha os dados principais e o endereço.</DialogDescription>
@@ -281,8 +292,20 @@ function ClienteFormDialog({
               <Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} />
             </div>
             <div className="grid gap-1.5">
+              <Label>Nome fantasia</Label>
+              <Input
+                value={form.nome_fantasia}
+                onChange={(e) => setForm({ ...form, nome_fantasia: e.target.value })}
+                disabled={form.tipo === "PF"}
+              />
+            </div>
+            <div className="grid gap-1.5">
               <Label>{form.tipo === "PJ" ? "CNPJ" : "CPF"}</Label>
               <Input value={form.documento} onChange={(e) => setForm({ ...form, documento: e.target.value })} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>{form.tipo === "PJ" ? "Inscrição estadual" : "RG"}</Label>
+              <Input value={form.ie_rg} onChange={(e) => setForm({ ...form, ie_rg: e.target.value })} />
             </div>
             <div className="grid gap-1.5">
               <Label>Telefone</Label>
@@ -292,13 +315,39 @@ function ClienteFormDialog({
               <Label>E-mail</Label>
               <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </div>
-            <div className="grid gap-1.5">
-              <Label>Cidade</Label>
-              <Input value={form.cidade} onChange={(e) => setForm({ ...form, cidade: e.target.value })} />
+          </div>
+
+          <div className="space-y-4">
+            <Label className="text-sm font-semibold text-foreground">Endereço</Label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid gap-1.5">
+                <Label>CEP</Label>
+                <Input value={form.cep} onChange={(e) => setForm({ ...form, cep: e.target.value })} />
+              </div>
+              <div className="grid gap-1.5 md:col-span-2">
+                <Label>Logradouro</Label>
+                <Input value={form.logradouro} onChange={(e) => setForm({ ...form, logradouro: e.target.value })} />
+              </div>
             </div>
-            <div className="grid gap-1.5">
-              <Label>Estado</Label>
-              <Input value={form.estado} onChange={(e) => setForm({ ...form, estado: e.target.value })} />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid gap-1.5">
+                <Label>Número</Label>
+                <Input value={form.numero} onChange={(e) => setForm({ ...form, numero: e.target.value })} />
+              </div>
+              <div className="grid gap-1.5 md:col-span-2">
+                <Label>Bairro</Label>
+                <Input value={form.bairro} onChange={(e) => setForm({ ...form, bairro: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid gap-1.5 md:col-span-2">
+                <Label>Cidade</Label>
+                <Input value={form.cidade} onChange={(e) => setForm({ ...form, cidade: e.target.value })} />
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Estado</Label>
+                <Input value={form.estado} onChange={(e) => setForm({ ...form, estado: e.target.value })} />
+              </div>
             </div>
           </div>
 
@@ -364,9 +413,11 @@ function ClienteViewDialog({ cliente, onClose }: { cliente: Cliente | null; onCl
           </TabsList>
 
           <TabsContent value="dados" className="mt-4 space-y-3 text-sm">
+            {cliente.nome_fantasia && <Row k="Nome fantasia" v={cliente.nome_fantasia} />}
+            <Row k={cliente.tipo === "PJ" ? "Inscrição estadual" : "RG"} v={cliente.ie_rg ?? "—"} />
             <Row k="Telefone" v={cliente.telefone ?? "—"} />
             <Row k="E-mail" v={cliente.email ?? "—"} />
-            <Row k="Endereço" v={`${cliente.cidade ?? "—"} / ${cliente.estado ?? "—"}`} />
+            <Row k="Endereço" v={formatEndereco(cliente)} />
             {cliente.observacoes && <Row k="Observações" v={cliente.observacoes} />}
           </TabsContent>
 
@@ -434,6 +485,11 @@ function ClienteViewDialog({ cliente, onClose }: { cliente: Cliente | null; onCl
       </DialogContent>
     </Dialog>
   );
+}
+
+function formatEndereco(c: Cliente) {
+  const parts = [c.logradouro, c.numero, c.bairro, c.cidade, c.estado, c.cep].filter(Boolean);
+  return parts.length > 0 ? parts.join(", ") : "—";
 }
 
 function Row({ k, v }: { k: string; v: string }) {
