@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  Search, Star, Phone, Mail, Globe, MapPin, Sparkles, Copy, UserPlus, X, Loader2,
+  Search, Star, Phone, Mail, Globe, MapPin, Sparkles, Copy, UserPlus, Wrench, X, Loader2,
 } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
@@ -37,12 +37,15 @@ const scoreBadge = (s: Lead["score"]) => {
   return { label: "Baixo", cls: "bg-slate-400/10 text-slate-400 border-slate-400/15", dot: false };
 };
 
+type FiltroTipo = "todos" | "cliente" | "parceiro";
+
 export default function CrmPage() {
   const supabase = createClient();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<Lead | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [filtroTipo, setFiltroTipo] = useState<FiltroTipo>("todos");
 
   useEffect(() => {
     supabase
@@ -56,11 +59,25 @@ export default function CrmPage() {
       });
   }, [supabase]);
 
+  const leadsFiltrados = useMemo(
+    () => (filtroTipo === "todos" ? leads : leads.filter((l) => l.tipo_negocio === filtroTipo)),
+    [leads, filtroTipo],
+  );
+
   const byCol = useMemo(() => {
     const map: Record<LeadStatus, Lead[]> = { novo: [], contatado: [], qualificado: [], proposta: [], ganho: [], perdido: [] };
-    leads.forEach((l) => map[l.status].push(l));
+    leadsFiltrados.forEach((l) => map[l.status].push(l));
     return map;
-  }, [leads]);
+  }, [leadsFiltrados]);
+
+  const contagem = useMemo(
+    () => ({
+      todos: leads.length,
+      cliente: leads.filter((l) => l.tipo_negocio === "cliente").length,
+      parceiro: leads.filter((l) => l.tipo_negocio === "parceiro").length,
+    }),
+    [leads],
+  );
 
   const onDrop = async (status: LeadStatus, id: string) => {
     setLeads((ls) => ls.map((l) => (l.id === id ? { ...l, status } : l)));
@@ -82,6 +99,25 @@ export default function CrmPage() {
           </Button>
         }
       />
+
+      <div className="flex gap-2 p-1 rounded-xl bg-muted w-fit">
+        {([
+          { v: "todos" as const, label: "Todos" },
+          { v: "cliente" as const, label: "Clientes" },
+          { v: "parceiro" as const, label: "Parceiros" },
+        ]).map((opt) => (
+          <button
+            key={opt.v}
+            onClick={() => setFiltroTipo(opt.v)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
+              filtroTipo === opt.v ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+            }`}
+          >
+            {opt.label}
+            <span className="text-xs tabular-nums opacity-70">{contagem[opt.v]}</span>
+          </button>
+        ))}
+      </div>
 
       {loading ? (
         <div className="flex gap-4 overflow-x-auto pb-4">
@@ -114,8 +150,8 @@ export default function CrmPage() {
       <LeadDrawer
         lead={active}
         onClose={() => setActive(null)}
-        onConverted={(clienteId) => {
-          setLeads((ls) => ls.map((l) => (l.id === active?.id ? { ...l, converted_cliente_id: clienteId } : l)));
+        onConverted={(field, id) => {
+          setLeads((ls) => ls.map((l) => (l.id === active?.id ? { ...l, [field]: id } : l)));
           setActive(null);
         }}
       />
@@ -190,10 +226,22 @@ function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
         <Phone className="h-3 w-3" strokeWidth={1.5} />
         <span className="truncate">{lead.telefone}</span>
       </div>
-      <div className="mt-3 flex items-center justify-between">
+      <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
         <span className="text-[10px] px-2 py-0.5 rounded-md bg-muted text-muted-foreground font-medium">
           {lead.categoria}
         </span>
+        {lead.tipo_negocio && (
+          <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md border font-medium ${
+            lead.tipo_negocio === "parceiro"
+              ? "bg-indigo-500/10 text-indigo-600 border-indigo-500/20"
+              : "bg-sky-500/10 text-sky-600 border-sky-500/20"
+          }`}>
+            {lead.tipo_negocio === "parceiro" ? <Wrench className="h-2.5 w-2.5" /> : null}
+            {lead.tipo_negocio === "parceiro" ? "Parceiro" : "Cliente"}
+          </span>
+        )}
+      </div>
+      <div className="mt-2 flex items-center justify-end">
         <span className={`inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-md border font-medium ${badge.cls}`}>
           {badge.dot && <span className="h-1.5 w-1.5 rounded-full bg-current pulse-dot" />}
           {badge.label}
@@ -224,7 +272,13 @@ function EmptyColumn({ status, onSearch }: { status: LeadStatus; onSearch: () =>
   );
 }
 
-function LeadDrawer({ lead, onClose, onConverted }: { lead: Lead | null; onClose: () => void; onConverted: (clienteId: string) => void }) {
+function LeadDrawer({
+  lead, onClose, onConverted,
+}: {
+  lead: Lead | null;
+  onClose: () => void;
+  onConverted: (field: "converted_cliente_id" | "converted_prestador_id", id: string) => void;
+}) {
   const supabase = createClient();
   const [atividades, setAtividades] = useState<LeadAtividade[]>([]);
   const [converting, setConverting] = useState(false);
@@ -249,8 +303,34 @@ function LeadDrawer({ lead, onClose, onConverted }: { lead: Lead | null; onClose
     toast.success("Mensagem copiada!");
   };
 
-  const converterEmCliente = async () => {
+  const ehParceiro = lead.tipo_negocio === "parceiro";
+
+  const converterLead = async () => {
     setConverting(true);
+    if (ehParceiro) {
+      const { data: prestador, error } = await supabase.from("prestadores").insert({
+        tipo: "PJ",
+        nome: lead.empresa,
+        documento: "",
+        especialidade: lead.categoria,
+        telefone: lead.telefone,
+        email: lead.email,
+        cidade: null,
+        estado: null,
+      }).select().single();
+      if (error || !prestador) {
+        toast.error("Erro ao converter lead", { description: error?.message });
+        setConverting(false);
+        return;
+      }
+      await supabase.from("leads").update({ converted_prestador_id: prestador.id, status: "ganho" }).eq("id", lead.id);
+      await supabase.from("lead_atividades").insert({ lead_id: lead.id, texto: `Convertido em prestador: ${prestador.nome}` });
+      toast.success("Convertido em prestador!");
+      setConverting(false);
+      onConverted("converted_prestador_id", prestador.id);
+      return;
+    }
+
     const { data: cliente, error } = await supabase.from("clientes").insert({
       tipo: "PJ",
       nome: lead.empresa,
@@ -272,7 +352,7 @@ function LeadDrawer({ lead, onClose, onConverted }: { lead: Lead | null; onClose
     await supabase.from("lead_atividades").insert({ lead_id: lead.id, texto: `Convertido em cliente: ${cliente.nome}` });
     toast.success("Convertido em cliente!");
     setConverting(false);
-    onConverted(cliente.id);
+    onConverted("converted_cliente_id", cliente.id);
   };
 
   return (
@@ -348,11 +428,15 @@ function LeadDrawer({ lead, onClose, onConverted }: { lead: Lead | null; onClose
           <div className="flex gap-2 pt-2">
             <Button
               className="flex-1 gap-2 bg-primary hover:bg-[var(--primary-hover)]"
-              disabled={converting || !!lead.converted_cliente_id}
-              onClick={converterEmCliente}
+              disabled={converting || !!lead.converted_cliente_id || !!lead.converted_prestador_id}
+              onClick={converterLead}
             >
-              <UserPlus className="h-4 w-4" />
-              {lead.converted_cliente_id ? "Já convertido" : converting ? "Convertendo…" : "Converter em cliente"}
+              {ehParceiro ? <Wrench className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
+              {lead.converted_cliente_id || lead.converted_prestador_id
+                ? "Já convertido"
+                : converting
+                  ? "Convertendo…"
+                  : ehParceiro ? "Converter em prestador" : "Converter em cliente"}
             </Button>
           </div>
         </div>

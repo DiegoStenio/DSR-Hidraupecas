@@ -20,6 +20,26 @@ export type Cliente = {
   created_at: string;
 };
 
+export type Prestador = {
+  id: string;
+  tipo: "PF" | "PJ";
+  nome: string;
+  nome_fantasia: string | null;
+  documento: string;
+  ie_rg: string | null;
+  especialidade: string | null;
+  telefone: string | null;
+  email: string | null;
+  cep: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  bairro: string | null;
+  cidade: string | null;
+  estado: string | null;
+  observacoes: string | null;
+  created_at: string;
+};
+
 export type Vendedor = {
   id: string;
   nome: string;
@@ -80,6 +100,7 @@ export type Lead = {
   origem: "manual" | "apify";
   tipo_negocio: "cliente" | "parceiro" | null;
   converted_cliente_id: string | null;
+  converted_prestador_id: string | null;
   created_at: string;
 };
 
