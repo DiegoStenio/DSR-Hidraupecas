@@ -92,6 +92,8 @@ export default function ImprimirOrcamentoPage() {
     ? (orcamento.group_unit_price ?? 0) * (orcamento.group_quantity ?? 1)
     : orcamento.itens.reduce((sum, item) => sum + item.valor, 0);
 
+  const isPix = (orcamento.plano ?? "").toLowerCase().includes("pix");
+
   return (
     <div className="bg-muted min-h-screen p-4 md:p-8">
       <div className="flex justify-center items-center gap-4 mb-8">
@@ -105,11 +107,17 @@ export default function ImprimirOrcamentoPage() {
 
       <div ref={printRef} className="w-[210mm] mx-auto bg-white text-black shadow-lg font-sans text-xs">
         <header className="bg-[#0B1F3A] text-white p-8 flex items-center justify-between">
-          <div className="space-y-0.5">
-            <h1 className="text-xl font-bold uppercase">{settings?.nome || "Empresa"}</h1>
-            {settings?.cnpj && <p className="text-xs">CNPJ: {settings.cnpj}</p>}
-            {settings?.endereco && <p className="text-xs">{settings.endereco}</p>}
-            <p className="text-xs">{[settings?.telefone, settings?.email].filter(Boolean).join(" · ")}</p>
+          <div className="flex items-center gap-3">
+            {settings?.logo_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={settings.logo_url} alt="Logo" className="h-12 w-12 object-contain rounded-md bg-white/10 p-1" crossOrigin="anonymous" />
+            )}
+            <div className="space-y-0.5">
+              <h1 className="text-xl font-bold uppercase">{settings?.nome || "Empresa"}</h1>
+              {settings?.cnpj && <p className="text-xs">CNPJ: {settings.cnpj}</p>}
+              {settings?.endereco && <p className="text-xs">{settings.endereco}</p>}
+              <p className="text-xs">{[settings?.telefone, settings?.email].filter(Boolean).join(" · ")}</p>
+            </div>
           </div>
           <div className="text-right space-y-0.5">
             <h2 className="text-lg font-bold" style={{ color: "#C9A227" }}>ORÇAMENTO</h2>
@@ -202,15 +210,25 @@ export default function ImprimirOrcamentoPage() {
           </div>
         </section>
 
-        <footer className="border-t-2 border-black pt-4 px-8 pb-8">
-          {orcamento.plano && (
-            <>
-              <h3 className="font-bold mb-2 uppercase">Condições de Pagamento:</h3>
-              <p className="font-semibold">{orcamento.plano}</p>
-              {orcamento.installments_count && orcamento.installments_count > 1 && (
-                <p className="mt-1">{orcamento.installments_count}x de {fmt(orcamento.total / orcamento.installments_count)}</p>
-              )}
-            </>
+        <footer className="border-t-2 border-black pt-4 px-8 pb-8 grid grid-cols-2 gap-8">
+          <div>
+            {orcamento.plano && (
+              <>
+                <h3 className="font-bold mb-2 uppercase">Condições de Pagamento:</h3>
+                <p className="font-semibold">{orcamento.plano}</p>
+                {orcamento.installments_count && orcamento.installments_count > 1 && (
+                  <p className="mt-1">{orcamento.installments_count}x de {fmt(orcamento.total / orcamento.installments_count)}</p>
+                )}
+              </>
+            )}
+          </div>
+          {isPix && settings?.pix_qrcode_url && (
+            <div className="flex flex-col items-center">
+              <h3 className="font-bold mb-2">Pague com PIX</h3>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={settings.pix_qrcode_url} alt="QR Code PIX" className="h-24 w-24 object-contain" crossOrigin="anonymous" />
+              {settings.pix_chave && <p className="mt-1 text-[10px]">Chave: {settings.pix_chave}</p>}
+            </div>
           )}
         </footer>
       </div>

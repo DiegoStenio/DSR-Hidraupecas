@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Eye, EyeOff, Sparkles, Upload, Image as ImageIcon, Crown, Check } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
@@ -67,8 +67,13 @@ export default function ConfigPage() {
         </TabsContent>
 
         <TabsContent value="pagamento" className="mt-5">
-          <SectionCard title="QR Code Pix" subtitle="Imagem usada no rodapé do PDF de orçamento.">
-            <UploadBox label="QR Code Pix" hint="PNG ou JPG · até 2MB" />
+          <SectionCard title="QR Code Pix" subtitle="Imagem usada no rodapé do PDF de orçamento quando o plano de pagamento for Pix.">
+            <UploadBox
+              label="QR Code Pix"
+              hint="PNG ou JPG · até 2MB"
+              value={settings.pix_qrcode_url}
+              onUploaded={(url) => save({ pix_qrcode_url: url })}
+            />
             <div className="mt-4 grid gap-1.5 max-w-md">
               <Label>Chave Pix</Label>
               <Input defaultValue={settings.pix_chave ?? ""} onBlur={(e) => save({ pix_chave: e.target.value })} />
@@ -143,8 +148,16 @@ function EmpresaForm({ settings, onSave }: { settings: CompanySettings; onSave: 
         </div>
       </div>
       <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-        <UploadBox label="Logo / cabeçalho do PDF" />
-        <UploadBox label="Imagem de fundo do app" />
+        <UploadBox
+          label="Logo / cabeçalho do PDF"
+          value={settings.logo_url}
+          onUploaded={(url) => onSave({ logo_url: url })}
+        />
+        <UploadBox
+          label="Imagem de fundo do app"
+          value={settings.background_url}
+          onUploaded={(url) => onSave({ background_url: url })}
+        />
       </div>
       <div className="mt-5 flex justify-end">
         <Button onClick={() => onSave(form)} className="bg-primary hover:bg-[var(--primary-hover)]">Salvar alterações</Button>
@@ -174,13 +187,51 @@ function Field({ label, defaultValue }: { label: string; defaultValue?: string }
   );
 }
 
-function UploadBox({ label, hint }: { label: string; hint?: string }) {
+function UploadBox({
+  label, hint, value, onUploaded,
+}: { label: string; hint?: string; value?: string | null; onUploaded: (url: string) => void }) {
+  const supabase = createClient();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleFile = async (file: File) => {
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Arquivo muito grande", { description: "O limite é 2MB." });
+      return;
+    }
+    setUploading(true);
+    const ext = file.name.split(".").pop() ?? "png";
+    const path = `${crypto.randomUUID()}.${ext}`;
+    const { error } = await supabase.storage.from("company-assets").upload(path, file, { upsert: true });
+    setUploading(false);
+    if (error) { toast.error("Erro ao enviar imagem", { description: error.message }); return; }
+    const { data } = supabase.storage.from("company-assets").getPublicUrl(path);
+    onUploaded(data.publicUrl);
+    toast.success("Imagem enviada");
+  };
+
   return (
     <div>
       <Label className="mb-1.5 block">{label}</Label>
-      <div className="rounded-xl border-2 border-dashed border-border bg-muted/30 hover:border-[var(--gold)]/40 transition-colors p-6 text-center cursor-pointer">
-        <ImageIcon className="h-6 w-6 mx-auto text-muted-foreground" strokeWidth={1.5} />
-        <p className="text-xs mt-2 text-foreground font-medium">Clique para enviar</p>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+        className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+      />
+      <div
+        onClick={() => inputRef.current?.click()}
+        className="rounded-xl border-2 border-dashed border-border bg-muted/30 hover:border-[var(--gold)]/40 transition-colors p-6 text-center cursor-pointer"
+      >
+        {value ? (
+          <img src={value} alt={label} className="mx-auto h-16 object-contain" />
+        ) : (
+          <ImageIcon className="h-6 w-6 mx-auto text-muted-foreground" strokeWidth={1.5} />
+        )}
+        <p className="text-xs mt-2 text-foreground font-medium">
+          {uploading ? "Enviando…" : value ? "Clique para substituir" : "Clique para enviar"}
+        </p>
         <p className="text-[10px] text-muted-foreground mt-0.5">{hint ?? "PNG, JPG ou SVG"}</p>
       </div>
     </div>
