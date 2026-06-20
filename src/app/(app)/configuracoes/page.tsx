@@ -147,18 +147,6 @@ function EmpresaForm({ settings, onSave }: { settings: CompanySettings; onSave: 
           <Input value={form.endereco} onChange={(e) => setForm({ ...form, endereco: e.target.value })} />
         </div>
       </div>
-      <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-        <UploadBox
-          label="Logo / cabeçalho do PDF"
-          value={settings.logo_url}
-          onUploaded={(url) => onSave({ logo_url: url })}
-        />
-        <UploadBox
-          label="Imagem de fundo do app"
-          value={settings.background_url}
-          onUploaded={(url) => onSave({ background_url: url })}
-        />
-      </div>
       <div className="mt-5 flex justify-end">
         <Button onClick={() => onSave(form)} className="bg-primary hover:bg-[var(--primary-hover)]">Salvar alterações</Button>
       </div>
