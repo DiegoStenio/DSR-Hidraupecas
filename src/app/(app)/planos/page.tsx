@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -37,16 +38,16 @@ export default function PlanosPage() {
       });
   }, [supabase]);
 
-  const handleSave = async (p: { id?: string; nome: string; descricao: string; parcelas: number }) => {
+  const handleSave = async (p: { id?: string; nome: string; descricao: string; parcelas: number; is_pix: boolean }) => {
     if (p.id) {
       const { data, error } = await supabase
-        .from("planos_pagamento").update({ nome: p.nome, descricao: p.descricao, parcelas: p.parcelas }).eq("id", p.id).select().single();
+        .from("planos_pagamento").update({ nome: p.nome, descricao: p.descricao, parcelas: p.parcelas, is_pix: p.is_pix }).eq("id", p.id).select().single();
       if (error) { toast.error("Erro ao atualizar", { description: error.message }); return; }
       setList(l => l.map(x => x.id === p.id ? data : x));
       toast.success("Atualizado");
     } else {
       const { data, error } = await supabase
-        .from("planos_pagamento").insert({ nome: p.nome, descricao: p.descricao, parcelas: p.parcelas }).select().single();
+        .from("planos_pagamento").insert({ nome: p.nome, descricao: p.descricao, parcelas: p.parcelas, is_pix: p.is_pix }).select().single();
       if (error) { toast.error("Erro ao adicionar", { description: error.message }); return; }
       setList(l => [data, ...l]);
       toast.success("Adicionado");
@@ -95,7 +96,12 @@ export default function PlanosPage() {
                     <CreditCard className="h-4 w-4" strokeWidth={1.5} />
                   </div>
                   <div className="min-w-0">
-                    <div className="font-semibold text-foreground truncate">{p.nome}</div>
+                    <div className="font-semibold text-foreground truncate flex items-center gap-2">
+                      {p.nome}
+                      {p.is_pix && (
+                        <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-[var(--gold)]/15 text-[var(--gold)] border border-[var(--gold)]/30">Pix</span>
+                      )}
+                    </div>
                     <div className="text-xs text-muted-foreground">{p.parcelas}x</div>
                   </div>
                 </div>
@@ -135,15 +141,17 @@ export default function PlanosPage() {
 
 function PlanoForm({
   open, plano, onClose, onSave,
-}: { open: boolean; plano: PlanoPagamento | null; onClose: () => void; onSave: (p: { id?: string; nome: string; descricao: string; parcelas: number }) => void }) {
+}: { open: boolean; plano: PlanoPagamento | null; onClose: () => void; onSave: (p: { id?: string; nome: string; descricao: string; parcelas: number; is_pix: boolean }) => void }) {
   const [nome, setNome] = useState(plano?.nome ?? "");
   const [descricao, setDescricao] = useState(plano?.descricao ?? "");
   const [parcelas, setParcelas] = useState(plano?.parcelas ?? 1);
+  const [isPix, setIsPix] = useState(plano?.is_pix ?? false);
 
   useEffect(() => {
     setNome(plano?.nome ?? "");
     setDescricao(plano?.descricao ?? "");
     setParcelas(plano?.parcelas ?? 1);
+    setIsPix(plano?.is_pix ?? false);
   }, [plano, open]);
 
   return (
@@ -154,10 +162,17 @@ function PlanoForm({
           <div className="grid gap-1.5"><Label>Nome</Label><Input value={nome} onChange={(e) => setNome(e.target.value)} /></div>
           <div className="grid gap-1.5"><Label>Descrição</Label><Textarea rows={3} value={descricao} onChange={(e) => setDescricao(e.target.value)} /></div>
           <div className="grid gap-1.5"><Label>Parcelas</Label><Input type="number" min={1} value={parcelas} onChange={(e) => setParcelas(Number(e.target.value))} /></div>
+          <div className="flex items-center justify-between rounded-xl border border-border p-3">
+            <div>
+              <Label htmlFor="is-pix" className="cursor-pointer">Este plano é Pix</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">Mostra o QR code e a chave Pix (configurados em Configurações) no PDF do orçamento.</p>
+            </div>
+            <Switch id="is-pix" checked={isPix} onCheckedChange={setIsPix} />
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={() => onSave({ id: plano?.id, nome, descricao, parcelas })} className="bg-primary hover:bg-[var(--primary-hover)]">Salvar</Button>
+          <Button onClick={() => onSave({ id: plano?.id, nome, descricao, parcelas, is_pix: isPix })} className="bg-primary hover:bg-[var(--primary-hover)]">Salvar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

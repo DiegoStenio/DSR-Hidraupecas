@@ -6,7 +6,7 @@ import { ArrowLeft, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/client";
-import type { Cliente, CompanySettings, Orcamento, Vendedor } from "@/lib/supabase/types";
+import type { Cliente, CompanySettings, Orcamento, PlanoPagamento, Vendedor } from "@/lib/supabase/types";
 import { toast } from "sonner";
 
 const fmt = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -22,6 +22,7 @@ export default function ImprimirOrcamentoPage() {
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [vendedor, setVendedor] = useState<Vendedor | null>(null);
   const [settings, setSettings] = useState<CompanySettings | null>(null);
+  const [plano, setPlano] = useState<PlanoPagamento | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
 
@@ -31,14 +32,16 @@ export default function ImprimirOrcamentoPage() {
       if (error || !o) { setLoading(false); return; }
       setOrcamento(o);
 
-      const [{ data: c }, { data: v }, { data: s }] = await Promise.all([
+      const [{ data: c }, { data: v }, { data: s }, { data: pl }] = await Promise.all([
         o.cliente_id ? supabase.from("clientes").select("*").eq("id", o.cliente_id).single() : Promise.resolve({ data: null }),
         o.vendedor_id ? supabase.from("vendedores").select("*").eq("id", o.vendedor_id).single() : Promise.resolve({ data: null }),
         supabase.from("company_settings").select("*").limit(1).maybeSingle(),
+        o.plano_id ? supabase.from("planos_pagamento").select("*").eq("id", o.plano_id).single() : Promise.resolve({ data: null }),
       ]);
       setCliente(c ?? null);
       setVendedor(v ?? null);
       setSettings(s ?? null);
+      setPlano(pl ?? null);
       setLoading(false);
     })();
   }, [id, supabase]);
@@ -92,7 +95,7 @@ export default function ImprimirOrcamentoPage() {
     ? (orcamento.group_unit_price ?? 0) * (orcamento.group_quantity ?? 1)
     : orcamento.itens.reduce((sum, item) => sum + item.valor, 0);
 
-  const isPix = (orcamento.plano ?? "").toLowerCase().includes("pix");
+  const isPix = plano ? plano.is_pix : (orcamento.plano ?? "").toLowerCase().includes("pix");
 
   return (
     <div className="bg-muted min-h-screen p-4 md:p-8">

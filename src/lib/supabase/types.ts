@@ -26,6 +26,7 @@ export type PlanoPagamento = {
   nome: string;
   descricao: string | null;
   parcelas: number;
+  is_pix: boolean;
   created_at: string;
 };
 
@@ -43,6 +44,7 @@ export type Orcamento = {
   status: "pendente" | "realizado";
   data: string;
   plano: string | null;
+  plano_id: string | null;
   itens: ItemOrcamento[];
   budget_type: "items" | "group";
   group_unit_price: number | null;

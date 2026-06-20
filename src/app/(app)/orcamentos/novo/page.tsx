@@ -91,7 +91,9 @@ function NovoOrcamentoForm() {
         setDesconto(orc.desconto);
         setDescontoInput(orc.desconto > 0 ? formatBRL(orc.desconto) : "");
         setObservacao(orc.observacao ?? "");
-        const plano = p.data?.find(pl => pl.nome === orc.plano);
+        const plano = orc.plano_id
+          ? p.data?.find(pl => pl.id === orc.plano_id)
+          : p.data?.find(pl => pl.nome === orc.plano);
         setPlanoId(plano?.id ?? "");
         setInstallmentsCount(orc.installments_count ?? 1);
       } else {
@@ -150,6 +152,7 @@ function NovoOrcamentoForm() {
       vendedor_id: vendedor.id, vendedor_nome: vendedor.nome,
       total, desconto, status: "pendente" as const,
       plano: planoSelecionado?.nome ?? null,
+      plano_id: planoSelecionado?.id ?? null,
       itens: items.map(({ descricao, qtd, valor }) => ({ descricao, qtd, valor })),
       budget_type: budgetType,
       group_unit_price: budgetType === "group" ? groupUnitPrice : null,
