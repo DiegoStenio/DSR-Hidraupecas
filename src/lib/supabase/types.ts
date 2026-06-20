@@ -44,6 +44,11 @@ export type Orcamento = {
   data: string;
   plano: string | null;
   itens: ItemOrcamento[];
+  budget_type: "items" | "group";
+  group_unit_price: number | null;
+  group_quantity: number | null;
+  observacao: string | null;
+  installments_count: number | null;
   created_at: string;
 };
 
