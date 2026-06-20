@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Eye, EyeOff, Sparkles, Upload, Image as ImageIcon, Crown, Check } from "lucide-react";
+import { Sparkles, Upload, Image as ImageIcon, Crown, Check } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -265,37 +265,23 @@ function AiProviderToggle({ value, onChange }: { value: "gemini" | "claude"; onC
 }
 
 function ApifyToken() {
-  const [token, setToken] = useState("");
-  const [show, setShow] = useState(false);
-  const isEmpty = !token.trim();
+  const [configured, setConfigured] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch("/api/leads/status").then(r => r.json()).then(d => setConfigured(d.configured)).catch(() => setConfigured(false));
+  }, []);
 
   return (
     <div className="space-y-3 max-w-xl">
-      <div className="grid gap-1.5">
-        <Label>API Token</Label>
-        <div className="relative">
-          <Input
-            type={show ? "text" : "password"}
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder="apify_api_..."
-            className="pr-11 font-mono text-xs"
-          />
-          <button
-            type="button"
-            onClick={() => setShow(s => !s)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-muted"
-          >
-            {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </button>
-        </div>
-      </div>
-      {isEmpty ? (
+      {configured === null ? (
+        <Skeleton className="h-16 rounded-xl" />
+      ) : !configured ? (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
           <div className="text-xs uppercase tracking-wider text-amber-600 dark:text-amber-400 font-semibold mb-1">Não configurado</div>
           <p className="text-sm text-foreground/90 leading-relaxed">
-            Sem o token, a busca de leads no CRM ficará indisponível.
-            Gere um token em <span className="font-medium">apify.com → Settings → Integrations</span> e cole aqui.
+            Sem o token, a busca de leads no CRM ficará indisponível. O token fica configurado
+            como variável de ambiente no servidor (<code className="font-mono text-xs">APIFY_API_TOKEN</code>),
+            não nesta tela — fale com quem administra o deploy pra adicionar.
           </p>
         </div>
       ) : (

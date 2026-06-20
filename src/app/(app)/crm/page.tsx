@@ -118,7 +118,11 @@ export default function CrmPage() {
           setActive(null);
         }}
       />
-      <SearchLeadsDialog open={searchOpen} onOpenChange={setSearchOpen} />
+      <SearchLeadsDialog
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        onLeadsAdded={(novos) => setLeads((ls) => [...novos, ...ls])}
+      />
     </div>
   );
 }
@@ -368,29 +372,48 @@ function InfoCell({ icon: Icon, label, value }: { icon: typeof Phone; label: str
   );
 }
 
-function SearchLeadsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (b: boolean) => void }) {
+function SearchLeadsDialog({
+  open, onOpenChange, onLeadsAdded,
+}: { open: boolean; onOpenChange: (b: boolean) => void; onLeadsAdded: (leads: Lead[]) => void }) {
   const [nicho, setNicho] = useState("");
   const [cidade, setCidade] = useState("");
   const [estado, setEstado] = useState("");
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
 
-  const search = () => {
+  const search = async () => {
+    if (!nicho.trim()) { toast.error("Informe um nicho ou palavra-chave."); return; }
     setLoading(true);
     setProgress(8);
     const interval = setInterval(() => {
-      setProgress((p) => {
-        if (p >= 100) { clearInterval(interval); return 100; }
-        return p + Math.random() * 12;
+      setProgress((p) => (p >= 92 ? 92 : p + Math.random() * 10));
+    }, 600);
+
+    try {
+      const res = await fetch("/api/leads/buscar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nicho, cidade, estado }),
       });
-    }, 280);
-    setTimeout(() => {
+      const json = await res.json();
       clearInterval(interval);
       setProgress(100);
       setLoading(false);
+
+      if (!res.ok) {
+        toast.error("Erro ao buscar leads", { description: json.error });
+        return;
+      }
+
       onOpenChange(false);
-      toast.info("Busca via Apify ainda não está configurada — adicione o token nas Configurações.");
-    }, 1600);
+      setNicho(""); setCidade(""); setEstado("");
+      onLeadsAdded(json.leads ?? []);
+      toast.success(`${json.count} lead(s) encontrado(s)`, { description: "Adicionados na coluna \"Novo\"." });
+    } catch (err) {
+      clearInterval(interval);
+      setLoading(false);
+      toast.error("Erro ao buscar leads", { description: err instanceof Error ? err.message : "Tente novamente." });
+    }
   };
 
   return (
