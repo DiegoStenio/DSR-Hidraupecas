@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  Search, Star, Phone, Mail, Globe, MapPin, Sparkles, Copy, UserPlus, Wrench, X, Loader2,
+  Search, Star, Phone, Mail, Globe, MapPin, Sparkles, Copy, UserPlus, Wrench, X, Loader2, Send,
 } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
@@ -372,10 +372,30 @@ function LeadDrawer({
 
         <div className="p-6 space-y-6">
           <div className="grid grid-cols-2 gap-3">
-            <InfoCell icon={Phone} label="Telefone" value={lead.telefone ?? "—"} />
-            <InfoCell icon={Mail} label="Email" value={lead.email ?? "—"} />
-            <InfoCell icon={Globe} label="Site" value={lead.site ?? "—"} />
-            <InfoCell icon={MapPin} label="Endereço" value={lead.endereco ?? "—"} />
+            <InfoCell
+              icon={Phone} label="Telefone" value={lead.telefone ?? "—"}
+              actions={lead.telefone ? [
+                { icon: Phone, label: "Ligar", href: `tel:${lead.telefone.replace(/[^\d+]/g, "")}` },
+                {
+                  icon: Send, label: "WhatsApp", cls: "text-emerald-600",
+                  href: `https://wa.me/${lead.telefone.replace(/\D/g, "")}${
+                    lead.sugestao_whatsapp ? `?text=${encodeURIComponent(lead.sugestao_whatsapp)}` : ""
+                  }`,
+                },
+              ] : undefined}
+            />
+            <InfoCell
+              icon={Mail} label="Email" value={lead.email ?? "—"}
+              href={lead.email ? `mailto:${lead.email}` : undefined}
+            />
+            <InfoCell
+              icon={Globe} label="Site" value={lead.site ?? "—"}
+              href={lead.site ? (lead.site.startsWith("http") ? lead.site : `https://${lead.site}`) : undefined}
+            />
+            <InfoCell
+              icon={MapPin} label="Endereço" value={lead.endereco ?? "—"}
+              href={lead.endereco ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lead.endereco)}` : undefined}
+            />
             {lead.avaliacao && (
               <InfoCell icon={Star} label="Avaliação" value={`${lead.avaliacao.toFixed(1)} / 5`} />
             )}
@@ -445,14 +465,48 @@ function LeadDrawer({
   );
 }
 
-function InfoCell({ icon: Icon, label, value }: { icon: typeof Phone; label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-border bg-background p-3 min-w-0">
+function InfoCell({
+  icon: Icon, label, value, href, actions,
+}: {
+  icon: typeof Phone;
+  label: string;
+  value: string;
+  href?: string;
+  actions?: { icon: typeof Phone; label: string; href: string; cls?: string }[];
+}) {
+  const body = (
+    <>
       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
         <Icon className="h-3 w-3" strokeWidth={1.5} />
         {label}
       </div>
-      <div className="text-sm text-foreground truncate">{value}</div>
+      <div className={`text-sm truncate ${href ? "text-[var(--gold)]" : "text-foreground"} ${actions ? "pr-14" : ""}`}>{value}</div>
+    </>
+  );
+
+  return (
+    <div className="relative rounded-xl border border-border bg-background p-3 min-w-0">
+      {href ? (
+        <a href={href} target="_blank" rel="noopener noreferrer" className="block hover:opacity-80 transition-opacity">
+          {body}
+        </a>
+      ) : body}
+      {actions && actions.length > 0 && (
+        <div className="absolute right-2 top-2 flex gap-1">
+          {actions.map((a) => (
+            <a
+              key={a.label}
+              href={a.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={a.label}
+              className={`grid h-6 w-6 place-items-center rounded-md hover:bg-muted transition-colors ${a.cls ?? "text-muted-foreground"}`}
+            >
+              <a.icon className="h-3.5 w-3.5" />
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
