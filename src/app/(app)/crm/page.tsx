@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/client";
 import type { Lead, LeadAtividade, LeadStatus } from "@/lib/supabase/types";
@@ -375,30 +376,87 @@ function InfoCell({ icon: Icon, label, value }: { icon: typeof Phone; label: str
 function SearchLeadsDialog({
   open, onOpenChange, onLeadsAdded,
 }: { open: boolean; onOpenChange: (b: boolean) => void; onLeadsAdded: (leads: Lead[]) => void }) {
+  const [step, setStep] = useState<"form" | "sugestoes">("form");
   const [nicho, setNicho] = useState("");
   const [cidade, setCidade] = useState("");
   const [estado, setEstado] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [gerando, setGerando] = useState(false);
+  const [buscando, setBuscando] = useState(false);
   const [progress, setProgress] = useState(0);
 
-  const search = async () => {
-    if (!nicho.trim()) { toast.error("Informe um nicho ou palavra-chave."); return; }
-    setLoading(true);
-    setProgress(8);
-    const interval = setInterval(() => {
-      setProgress((p) => (p >= 92 ? 92 : p + Math.random() * 10));
-    }, 600);
+  const [termosClientes, setTermosClientes] = useState<string[]>([]);
+  const [termosParceiros, setTermosParceiros] = useState<string[]>([]);
+  const [selClientes, setSelClientes] = useState<Set<string>>(new Set());
+  const [selParceiros, setSelParceiros] = useState<Set<string>>(new Set());
+  const [novoCliente, setNovoCliente] = useState("");
+  const [novoParceiro, setNovoParceiro] = useState("");
 
+  const reset = () => {
+    setStep("form"); setNicho(""); setCidade(""); setEstado("");
+    setTermosClientes([]); setTermosParceiros([]);
+    setSelClientes(new Set()); setSelParceiros(new Set());
+  };
+
+  const gerarSugestoes = async () => {
+    setGerando(true);
     try {
-      const res = await fetch("/api/leads/buscar", {
+      const res = await fetch("/api/leads/sugestoes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nicho, cidade, estado }),
       });
       const json = await res.json();
+      setGerando(false);
+      if (!res.ok) { toast.error("Erro ao gerar sugestões", { description: json.error }); return; }
+      setTermosClientes(json.termosClientes ?? []);
+      setTermosParceiros(json.termosParceiros ?? []);
+      setSelClientes(new Set(json.termosClientes ?? []));
+      setSelParceiros(new Set(json.termosParceiros ?? []));
+      setStep("sugestoes");
+    } catch (err) {
+      setGerando(false);
+      toast.error("Erro ao gerar sugestões", { description: err instanceof Error ? err.message : "Tente novamente." });
+    }
+  };
+
+  const toggle = (set: Set<string>, setFn: (s: Set<string>) => void, termo: string) => {
+    const next = new Set(set);
+    next.has(termo) ? next.delete(termo) : next.add(termo);
+    setFn(next);
+  };
+
+  const addCustom = (
+    valor: string, lista: string[], setLista: (l: string[]) => void,
+    sel: Set<string>, setSel: (s: Set<string>) => void, clear: () => void,
+  ) => {
+    const v = valor.trim();
+    if (!v || lista.includes(v)) return;
+    setLista([...lista, v]);
+    setSel(new Set([...sel, v]));
+    clear();
+  };
+
+  const buscar = async () => {
+    const termosClientesSel = termosClientes.filter((t) => selClientes.has(t));
+    const termosParceirosSel = termosParceiros.filter((t) => selParceiros.has(t));
+    if (termosClientesSel.length === 0 && termosParceirosSel.length === 0) {
+      toast.error("Selecione ao menos um termo de busca.");
+      return;
+    }
+    setBuscando(true);
+    setProgress(8);
+    const interval = setInterval(() => setProgress((p) => (p >= 92 ? 92 : p + Math.random() * 10)), 600);
+
+    try {
+      const res = await fetch("/api/leads/buscar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ termosClientes: termosClientesSel, termosParceiros: termosParceirosSel, cidade, estado }),
+      });
+      const json = await res.json();
       clearInterval(interval);
       setProgress(100);
-      setLoading(false);
+      setBuscando(false);
 
       if (!res.ok) {
         toast.error("Erro ao buscar leads", { description: json.error });
@@ -406,45 +464,45 @@ function SearchLeadsDialog({
       }
 
       onOpenChange(false);
-      setNicho(""); setCidade(""); setEstado("");
+      reset();
       onLeadsAdded(json.leads ?? []);
       toast.success(`${json.count} lead(s) encontrado(s)`, { description: "Adicionados na coluna \"Novo\"." });
     } catch (err) {
       clearInterval(interval);
-      setLoading(false);
+      setBuscando(false);
       toast.error("Erro ao buscar leads", { description: err instanceof Error ? err.message : "Tente novamente." });
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) reset(); }}>
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-[var(--gold)]" />
             Buscar novos leads
           </DialogTitle>
           <DialogDescription>
-            Define os critérios para o robô da Apify capturar empresas relevantes.
+            {step === "form"
+              ? "A IA sugere termos de busca pros dois lados do negócio: quem tem peça pra arrumar e quem arruma."
+              : "Revise os termos sugeridos pela IA — desmarque o que não interessa ou adicione os seus."}
           </DialogDescription>
         </DialogHeader>
 
-        {loading ? (
+        {buscando ? (
           <div className="py-6 space-y-4">
             <div className="flex items-center gap-2 text-sm text-foreground">
               <Loader2 className="h-4 w-4 animate-spin text-[var(--gold)]" />
               Buscando leads… isso pode levar alguns minutos.
             </div>
             <Progress value={Math.min(progress, 100)} className="h-2" />
-            <p className="text-xs text-muted-foreground">
-              Varrendo Google Maps, validando contatos e calculando scores com IA.
-            </p>
+            <p className="text-xs text-muted-foreground">Varrendo Google Maps para cada termo selecionado.</p>
           </div>
-        ) : (
+        ) : step === "form" ? (
           <>
             <div className="grid gap-4 py-2">
               <div className="grid gap-1.5">
-                <Label htmlFor="nicho">Nicho / palavra-chave</Label>
+                <Label htmlFor="nicho">Nicho / palavra-chave (opcional)</Label>
                 <Input id="nicho" placeholder="Ex: hidráulica industrial" value={nicho} onChange={(e) => setNicho(e.target.value)} />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -460,7 +518,37 @@ function SearchLeadsDialog({
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button onClick={search} className="bg-primary hover:bg-[var(--primary-hover)] gap-2">
+              <Button onClick={gerarSugestoes} disabled={gerando} className="bg-primary hover:bg-[var(--primary-hover)] gap-2">
+                {gerando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {gerando ? "Gerando…" : "Gerar sugestões com IA"}
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <div className="grid gap-5 py-2 max-h-[55vh] overflow-y-auto pr-1">
+              <TermosGroup
+                label="Clientes — têm peça pra arrumar"
+                termos={termosClientes}
+                selecionados={selClientes}
+                onToggle={(t) => toggle(selClientes, setSelClientes, t)}
+                novoValor={novoCliente}
+                onNovoChange={setNovoCliente}
+                onAdd={() => addCustom(novoCliente, termosClientes, setTermosClientes, selClientes, setSelClientes, () => setNovoCliente(""))}
+              />
+              <TermosGroup
+                label="Parceiros — arrumam peça"
+                termos={termosParceiros}
+                selecionados={selParceiros}
+                onToggle={(t) => toggle(selParceiros, setSelParceiros, t)}
+                novoValor={novoParceiro}
+                onNovoChange={setNovoParceiro}
+                onAdd={() => addCustom(novoParceiro, termosParceiros, setTermosParceiros, selParceiros, setSelParceiros, () => setNovoParceiro(""))}
+              />
+            </div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setStep("form")}>Voltar</Button>
+              <Button onClick={buscar} className="bg-primary hover:bg-[var(--primary-hover)] gap-2">
                 <Sparkles className="h-4 w-4" />
                 Buscar via Apify
               </Button>
@@ -469,5 +557,37 @@ function SearchLeadsDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function TermosGroup({
+  label, termos, selecionados, onToggle, novoValor, onNovoChange, onAdd,
+}: {
+  label: string; termos: string[]; selecionados: Set<string>; onToggle: (t: string) => void;
+  novoValor: string; onNovoChange: (v: string) => void; onAdd: () => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs uppercase tracking-wider text-muted-foreground">{label}</Label>
+      <div className="space-y-1.5">
+        {termos.length === 0 && <p className="text-sm text-muted-foreground">Nenhum termo sugerido.</p>}
+        {termos.map((t) => (
+          <label key={t} className="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2 text-sm cursor-pointer hover:bg-muted/40">
+            <Checkbox checked={selecionados.has(t)} onCheckedChange={() => onToggle(t)} />
+            <span className="flex-1 text-foreground">{t}</span>
+          </label>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <Input
+          value={novoValor}
+          onChange={(e) => onNovoChange(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onAdd(); } }}
+          placeholder="Adicionar termo…"
+          className="h-8 text-sm"
+        />
+        <Button type="button" variant="outline" size="sm" onClick={onAdd}>Adicionar</Button>
+      </div>
+    </div>
   );
 }

@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/client";
@@ -100,6 +101,19 @@ export default function ConfigPage() {
             subtitle="Modelo usado para scoring de leads, resumos e sugestões de mensagem."
           >
             <AiProviderToggle value={settings.ai_provider} onChange={(p) => save({ ai_provider: p })} />
+          </SectionCard>
+
+          <SectionCard
+            title="Base de conhecimento da IA"
+            subtitle="Descreva o seu negócio pra IA gerar termos de busca relevantes na prospecção de leads."
+          >
+            <Textarea
+              defaultValue={settings.contexto_negocio ?? ""}
+              onBlur={(e) => save({ contexto_negocio: e.target.value })}
+              rows={8}
+              className="text-sm"
+              placeholder="Ex: a empresa atua como intermediária entre quem tem peça hidráulica quebrada e quem presta o serviço de reparo..."
+            />
           </SectionCard>
 
           <SectionCard

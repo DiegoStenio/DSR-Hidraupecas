@@ -15,6 +15,30 @@ type ApifyPlace = {
   categoryName?: string;
 };
 
+async function runApifySearch(termos: string[], localizacao: string, token: string): Promise<ApifyPlace[]> {
+  if (termos.length === 0) return [];
+  const searchStringsArray = termos.map((t) => (localizacao ? `${t} em ${localizacao}` : t));
+
+  const res = await fetch(
+    `https://api.apify.com/v2/acts/${ACTOR_ID}/run-sync-get-dataset-items?token=${token}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        searchStringsArray,
+        maxCrawledPlacesPerSearch: 8,
+        language: "pt-BR",
+        skipClosedPlaces: true,
+      }),
+    },
+  );
+
+  if (!res.ok) {
+    throw new Error(`Erro na Apify: ${await res.text()}`);
+  }
+  return (await res.json()) as ApifyPlace[];
+}
+
 export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -30,50 +54,50 @@ export async function POST(request: Request) {
     );
   }
 
-  const { nicho, cidade, estado } = (await request.json()) as { nicho?: string; cidade?: string; estado?: string };
-  if (!nicho?.trim()) {
-    return NextResponse.json({ error: "Informe um nicho ou palavra-chave." }, { status: 400 });
+  const { termosClientes = [], termosParceiros = [], cidade, estado } = (await request.json()) as {
+    termosClientes?: string[];
+    termosParceiros?: string[];
+    cidade?: string;
+    estado?: string;
+  };
+
+  if (termosClientes.length === 0 && termosParceiros.length === 0) {
+    return NextResponse.json({ error: "Selecione ao menos um termo de busca." }, { status: 400 });
   }
 
   const localizacao = [cidade, estado].filter(Boolean).join(", ");
-  const query = localizacao ? `${nicho} em ${localizacao}` : nicho;
 
-  const apifyRes = await fetch(
-    `https://api.apify.com/v2/acts/${ACTOR_ID}/run-sync-get-dataset-items?token=${token}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        searchStringsArray: [query],
-        maxCrawledPlacesPerSearch: 20,
-        language: "pt-BR",
-        skipClosedPlaces: true,
-      }),
-    },
-  );
-
-  if (!apifyRes.ok) {
-    const text = await apifyRes.text();
+  let clientesPlaces: ApifyPlace[] = [];
+  let parceirosPlaces: ApifyPlace[] = [];
+  try {
+    [clientesPlaces, parceirosPlaces] = await Promise.all([
+      runApifySearch(termosClientes, localizacao, token),
+      runApifySearch(termosParceiros, localizacao, token),
+    ]);
+  } catch (err) {
     await supabase.from("lead_searches").insert({
-      nicho, cidade: cidade || null, estado: estado || null, status: "erro", resultados_count: 0,
+      nicho: [...termosClientes, ...termosParceiros].join(", "), cidade: cidade || null, estado: estado || null,
+      status: "erro", resultados_count: 0,
     });
-    return NextResponse.json({ error: `Erro na Apify: ${text}` }, { status: 502 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Erro na Apify." }, { status: 502 });
   }
 
-  const places = (await apifyRes.json()) as ApifyPlace[];
+  const mapPlace = (p: ApifyPlace, tipo: "cliente" | "parceiro") => ({
+    empresa: p.title!,
+    telefone: p.phone ?? p.phoneUnformatted ?? null,
+    endereco: p.address ?? null,
+    site: p.website ?? null,
+    avaliacao: typeof p.totalScore === "number" ? p.totalScore : null,
+    categoria: p.categoryName ?? null,
+    status: "novo" as const,
+    origem: "apify" as const,
+    tipo_negocio: tipo,
+  });
 
-  const leadsToInsert = places
-    .filter((p) => p.title)
-    .map((p) => ({
-      empresa: p.title!,
-      telefone: p.phone ?? p.phoneUnformatted ?? null,
-      endereco: p.address ?? null,
-      site: p.website ?? null,
-      avaliacao: typeof p.totalScore === "number" ? p.totalScore : null,
-      categoria: p.categoryName ?? null,
-      status: "novo" as const,
-      origem: "apify" as const,
-    }));
+  const leadsToInsert = [
+    ...clientesPlaces.filter((p) => p.title).map((p) => mapPlace(p, "cliente")),
+    ...parceirosPlaces.filter((p) => p.title).map((p) => mapPlace(p, "parceiro")),
+  ];
 
   let inserted: unknown[] = [];
   if (leadsToInsert.length > 0) {
@@ -83,7 +107,7 @@ export async function POST(request: Request) {
   }
 
   await supabase.from("lead_searches").insert({
-    nicho, cidade: cidade || null, estado: estado || null,
+    nicho: [...termosClientes, ...termosParceiros].join(", "), cidade: cidade || null, estado: estado || null,
     status: "concluido", resultados_count: inserted.length,
   });
 

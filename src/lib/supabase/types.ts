@@ -78,6 +78,7 @@ export type Lead = {
   score_justificativa: string | null;
   sugestao_whatsapp: string | null;
   origem: "manual" | "apify";
+  tipo_negocio: "cliente" | "parceiro" | null;
   converted_cliente_id: string | null;
   created_at: string;
 };
@@ -111,6 +112,7 @@ export type CompanySettings = {
   background_url: string | null;
   pix_qrcode_url: string | null;
   pix_chave: string | null;
+  contexto_negocio: string | null;
   ai_provider: "gemini" | "claude";
   updated_at: string;
 };
