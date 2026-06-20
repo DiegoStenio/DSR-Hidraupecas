@@ -20,11 +20,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { createClient } from "@/lib/supabase/client";
 
 export function Header({ onOpenMobile }: { onOpenMobile: () => void }) {
   const { theme, toggle } = useTheme();
   const [cmdOpen, setCmdOpen] = useState(false);
   const router = useRouter();
+
+  const signOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -97,7 +105,7 @@ export function Header({ onOpenMobile }: { onOpenMobile: () => void }) {
             <DropdownMenuItem onClick={() => router.push("/configuracoes")}>Perfil</DropdownMenuItem>
             <DropdownMenuItem onClick={() => router.push("/configuracoes")}>Configurações</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => router.push("/login")} className="text-destructive">
+            <DropdownMenuItem onClick={signOut} className="text-destructive">
               Sair
             </DropdownMenuItem>
           </DropdownMenuContent>

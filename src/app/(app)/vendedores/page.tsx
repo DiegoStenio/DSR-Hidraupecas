@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, Pencil, Trash2, Briefcase, Phone } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
@@ -11,20 +11,62 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { vendedores as seed, type Vendedor } from "@/lib/mock-data";
+import { Skeleton } from "@/components/ui/skeleton";
+import { createClient } from "@/lib/supabase/client";
+import type { Vendedor } from "@/lib/supabase/types";
 import { toast } from "sonner";
 
 export default function VendedoresPage() {
-  const [list, setList] = useState<Vendedor[]>(seed);
+  const supabase = createClient();
+  const [list, setList] = useState<Vendedor[]>([]);
+  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Vendedor | null>(null);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<Vendedor | null>(null);
+
+  useEffect(() => {
+    supabase
+      .from("vendedores")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .then(({ data, error }) => {
+        if (error) toast.error("Erro ao carregar vendedores", { description: error.message });
+        else setList(data ?? []);
+        setLoading(false);
+      });
+  }, [supabase]);
+
+  const handleSave = async (v: { id?: string; nome: string; whatsapp: string }) => {
+    if (v.id) {
+      const { data, error } = await supabase
+        .from("vendedores").update({ nome: v.nome, whatsapp: v.whatsapp }).eq("id", v.id).select().single();
+      if (error) { toast.error("Erro ao atualizar", { description: error.message }); return; }
+      setList(l => l.map(x => x.id === v.id ? data : x));
+      toast.success("Atualizado");
+    } else {
+      const { data, error } = await supabase
+        .from("vendedores").insert({ nome: v.nome, whatsapp: v.whatsapp }).select().single();
+      if (error) { toast.error("Erro ao adicionar", { description: error.message }); return; }
+      setList(l => [data, ...l]);
+      toast.success("Adicionado");
+    }
+    setCreating(false); setEditing(null);
+  };
+
+  const handleDelete = async () => {
+    if (!deleting) return;
+    const { error } = await supabase.from("vendedores").delete().eq("id", deleting.id);
+    if (error) { toast.error("Erro ao excluir", { description: error.message }); setDeleting(null); return; }
+    setList(l => l.filter(x => x.id !== deleting.id));
+    toast.success("Excluído");
+    setDeleting(null);
+  };
 
   return (
     <div className="space-y-6 max-w-[1000px]">
       <PageHeader
         title="Vendedores"
-        subtitle={`${list.length} vendedores ativos`}
+        subtitle={loading ? "Carregando…" : `${list.length} vendedores ativos`}
         actions={
           <Button onClick={() => setCreating(true)} className="gap-2 bg-primary hover:bg-[var(--primary-hover)]">
             <Plus className="h-4 w-4" />Adicionar vendedor
@@ -32,7 +74,11 @@ export default function VendedoresPage() {
         }
       />
 
-      {list.length === 0 ? (
+      {loading ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {[0, 1].map(i => <Skeleton key={i} className="h-24 rounded-2xl" />)}
+        </div>
+      ) : list.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card p-12 text-center">
           <Briefcase className="h-8 w-8 mx-auto text-muted-foreground" strokeWidth={1.5} />
           <h3 className="mt-3 font-semibold text-foreground">Nenhum vendedor cadastrado</h3>
@@ -64,12 +110,7 @@ export default function VendedoresPage() {
         open={creating || editing !== null}
         vendedor={editing}
         onClose={() => { setCreating(false); setEditing(null); }}
-        onSave={(v) => {
-          if (editing) setList(l => l.map(x => x.id === editing.id ? v : x));
-          else setList(l => [{ ...v, id: `v${Date.now()}` }, ...l]);
-          toast.success(editing ? "Atualizado" : "Adicionado");
-          setCreating(false); setEditing(null);
-        }}
+        onSave={handleSave}
       />
 
       <AlertDialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>
@@ -80,10 +121,7 @@ export default function VendedoresPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={() => {
-              if (deleting) { setList(l => l.filter(x => x.id !== deleting.id)); toast.success("Excluído"); }
-              setDeleting(null);
-            }}>Excluir</AlertDialogAction>
+            <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={handleDelete}>Excluir</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -93,10 +131,14 @@ export default function VendedoresPage() {
 
 function VendedorForm({
   open, vendedor, onClose, onSave,
-}: { open: boolean; vendedor: Vendedor | null; onClose: () => void; onSave: (v: Vendedor) => void }) {
+}: { open: boolean; vendedor: Vendedor | null; onClose: () => void; onSave: (v: { id?: string; nome: string; whatsapp: string }) => void }) {
   const [nome, setNome] = useState(vendedor?.nome ?? "");
   const [whatsapp, setWhatsapp] = useState(vendedor?.whatsapp ?? "");
-  useState(() => { if (vendedor) { setNome(vendedor.nome); setWhatsapp(vendedor.whatsapp); } });
+
+  useEffect(() => {
+    setNome(vendedor?.nome ?? "");
+    setWhatsapp(vendedor?.whatsapp ?? "");
+  }, [vendedor, open]);
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -114,7 +156,7 @@ function VendedorForm({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={() => onSave({ id: vendedor?.id ?? "", nome, whatsapp })} className="bg-primary hover:bg-[var(--primary-hover)]">Salvar</Button>
+          <Button onClick={() => onSave({ id: vendedor?.id, nome, whatsapp })} className="bg-primary hover:bg-[var(--primary-hover)]">Salvar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

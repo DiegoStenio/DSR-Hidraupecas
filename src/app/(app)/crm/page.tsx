@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Search, Star, Phone, Mail, Globe, MapPin, Sparkles, Copy, UserPlus, X, Loader2,
 } from "lucide-react";
@@ -10,10 +10,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { leads as seedLeads, statusLeadConfig, type Lead, type LeadStatus } from "@/lib/mock-data";
+import { Skeleton } from "@/components/ui/skeleton";
+import { createClient } from "@/lib/supabase/client";
+import type { Lead, LeadAtividade, LeadStatus } from "@/lib/supabase/types";
 import { toast } from "sonner";
 
 const COLS: LeadStatus[] = ["novo", "contatado", "qualificado", "proposta", "ganho", "perdido"];
+
+const statusLeadConfig: Record<LeadStatus, { label: string }> = {
+  novo: { label: "Novo" },
+  contatado: { label: "Contatado" },
+  qualificado: { label: "Qualificado" },
+  proposta: { label: "Proposta" },
+  ganho: { label: "Ganho" },
+  perdido: { label: "Perdido" },
+};
 
 const scoreBadge = (s: Lead["score"]) => {
   if (s === "alto") return {
@@ -26,9 +37,23 @@ const scoreBadge = (s: Lead["score"]) => {
 };
 
 export default function CrmPage() {
-  const [leads, setLeads] = useState<Lead[]>(seedLeads);
+  const supabase = createClient();
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<Lead | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+
+  useEffect(() => {
+    supabase
+      .from("leads")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .then(({ data, error }) => {
+        if (error) toast.error("Erro ao carregar leads", { description: error.message });
+        else setLeads(data ?? []);
+        setLoading(false);
+      });
+  }, [supabase]);
 
   const byCol = useMemo(() => {
     const map: Record<LeadStatus, Lead[]> = { novo: [], contatado: [], qualificado: [], proposta: [], ganho: [], perdido: [] };
@@ -36,8 +61,11 @@ export default function CrmPage() {
     return map;
   }, [leads]);
 
-  const onDrop = (status: LeadStatus, id: string) => {
+  const onDrop = async (status: LeadStatus, id: string) => {
     setLeads((ls) => ls.map((l) => (l.id === id ? { ...l, status } : l)));
+    const { error } = await supabase.from("leads").update({ status }).eq("id", id);
+    if (error) { toast.error("Erro ao mover lead", { description: error.message }); return; }
+    await supabase.from("lead_atividades").insert({ lead_id: id, texto: `Status alterado para "${statusLeadConfig[status].label}"` });
     toast.success(`Lead movido para "${statusLeadConfig[status].label}"`);
   };
 
@@ -54,30 +82,42 @@ export default function CrmPage() {
         }
       />
 
-      {/* Kanban */}
-      <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 md:mx-0 md:px-0 snap-x snap-mandatory md:snap-none">
-        {COLS.map((status) => {
-          const cfg = statusLeadConfig[status];
-          const items = byCol[status];
-          return (
-            <KanbanColumn
-              key={status}
-              status={status}
-              label={cfg.label}
-              count={items.length}
-              onDrop={(id) => onDrop(status, id)}
-            >
-              {items.length === 0 ? (
-                <EmptyColumn status={status} onSearch={() => setSearchOpen(true)} />
-              ) : (
-                items.map((l) => <LeadCard key={l.id} lead={l} onOpen={() => setActive(l)} />)
-              )}
-            </KanbanColumn>
-          );
-        })}
-      </div>
+      {loading ? (
+        <div className="flex gap-4 overflow-x-auto pb-4">
+          {COLS.map((c) => <Skeleton key={c} className="w-[300px] h-[420px] rounded-2xl shrink-0" />)}
+        </div>
+      ) : (
+        <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 md:mx-0 md:px-0 snap-x snap-mandatory md:snap-none">
+          {COLS.map((status) => {
+            const cfg = statusLeadConfig[status];
+            const items = byCol[status];
+            return (
+              <KanbanColumn
+                key={status}
+                status={status}
+                label={cfg.label}
+                count={items.length}
+                onDrop={(id) => onDrop(status, id)}
+              >
+                {items.length === 0 ? (
+                  <EmptyColumn status={status} onSearch={() => setSearchOpen(true)} />
+                ) : (
+                  items.map((l) => <LeadCard key={l.id} lead={l} onOpen={() => setActive(l)} />)
+                )}
+              </KanbanColumn>
+            );
+          })}
+        </div>
+      )}
 
-      <LeadDrawer lead={active} onClose={() => setActive(null)} />
+      <LeadDrawer
+        lead={active}
+        onClose={() => setActive(null)}
+        onConverted={(clienteId) => {
+          setLeads((ls) => ls.map((l) => (l.id === active?.id ? { ...l, converted_cliente_id: clienteId } : l)));
+          setActive(null);
+        }}
+      />
       <SearchLeadsDialog open={searchOpen} onOpenChange={setSearchOpen} />
     </div>
   );
@@ -179,13 +219,57 @@ function EmptyColumn({ status, onSearch }: { status: LeadStatus; onSearch: () =>
   );
 }
 
-function LeadDrawer({ lead, onClose }: { lead: Lead | null; onClose: () => void }) {
+function LeadDrawer({ lead, onClose, onConverted }: { lead: Lead | null; onClose: () => void; onConverted: (clienteId: string) => void }) {
+  const supabase = createClient();
+  const [atividades, setAtividades] = useState<LeadAtividade[]>([]);
+  const [converting, setConverting] = useState(false);
+
+  useEffect(() => {
+    if (!lead) return;
+    supabase
+      .from("lead_atividades")
+      .select("*")
+      .eq("lead_id", lead.id)
+      .order("created_at", { ascending: false })
+      .then(({ data, error }) => {
+        if (error) toast.error("Erro ao carregar histórico", { description: error.message });
+        else setAtividades(data ?? []);
+      });
+  }, [lead, supabase]);
+
   if (!lead) return null;
   const badge = scoreBadge(lead.score);
   const copy = () => {
-    navigator.clipboard.writeText(lead.sugestaoWhatsapp);
+    navigator.clipboard.writeText(lead.sugestao_whatsapp ?? "");
     toast.success("Mensagem copiada!");
   };
+
+  const converterEmCliente = async () => {
+    setConverting(true);
+    const { data: cliente, error } = await supabase.from("clientes").insert({
+      tipo: "PJ",
+      nome: lead.empresa,
+      documento: "",
+      telefone: lead.telefone,
+      email: lead.email,
+      cidade: null,
+      estado: null,
+      ia_risco: "baixo",
+      ia_upsell: [],
+      ia_resumo: null,
+    }).select().single();
+    if (error || !cliente) {
+      toast.error("Erro ao converter lead", { description: error?.message });
+      setConverting(false);
+      return;
+    }
+    await supabase.from("leads").update({ converted_cliente_id: cliente.id, status: "ganho" }).eq("id", lead.id);
+    await supabase.from("lead_atividades").insert({ lead_id: lead.id, texto: `Convertido em cliente: ${cliente.nome}` });
+    toast.success("Convertido em cliente!");
+    setConverting(false);
+    onConverted(cliente.id);
+  };
+
   return (
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in" onClick={onClose} />
@@ -203,7 +287,7 @@ function LeadDrawer({ lead, onClose }: { lead: Lead | null; onClose: () => void 
 
         <div className="p-6 space-y-6">
           <div className="grid grid-cols-2 gap-3">
-            <InfoCell icon={Phone} label="Telefone" value={lead.telefone} />
+            <InfoCell icon={Phone} label="Telefone" value={lead.telefone ?? "—"} />
             <InfoCell icon={Mail} label="Email" value={lead.email ?? "—"} />
             <InfoCell icon={Globe} label="Site" value={lead.site ?? "—"} />
             <InfoCell icon={MapPin} label="Endereço" value={lead.endereco ?? "—"} />
@@ -223,37 +307,47 @@ function LeadDrawer({ lead, onClose }: { lead: Lead | null; onClose: () => void 
               </span>
             </div>
             <p className="text-sm leading-relaxed text-foreground/90 mb-4">
-              {lead.scoreJustificativa}
+              {lead.score_justificativa ?? "Ainda sem análise de IA gerada para este lead."}
             </p>
-            <div className="rounded-xl bg-card border border-border p-3">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center justify-between">
-                <span>Mensagem sugerida (WhatsApp)</span>
-                <button onClick={copy} className="inline-flex items-center gap-1 text-foreground hover:text-[var(--gold)] transition-colors">
-                  <Copy className="h-3 w-3" />Copiar
-                </button>
+            {lead.sugestao_whatsapp && (
+              <div className="rounded-xl bg-card border border-border p-3">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center justify-between">
+                  <span>Mensagem sugerida (WhatsApp)</span>
+                  <button onClick={copy} className="inline-flex items-center gap-1 text-foreground hover:text-[var(--gold)] transition-colors">
+                    <Copy className="h-3 w-3" />Copiar
+                  </button>
+                </div>
+                <p className="text-sm leading-relaxed text-foreground">{lead.sugestao_whatsapp}</p>
               </div>
-              <p className="text-sm leading-relaxed text-foreground">{lead.sugestaoWhatsapp}</p>
-            </div>
+            )}
           </div>
 
           {/* Timeline */}
           <div>
             <h3 className="text-sm font-semibold text-foreground mb-3">Histórico</h3>
-            <ol className="space-y-3 border-l border-border ml-2">
-              {lead.atividades.map((a, i) => (
-                <li key={i} className="relative pl-5">
-                  <span className="absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full bg-[var(--gold)] ring-4 ring-card" />
-                  <div className="text-xs text-muted-foreground">{a.data}</div>
-                  <div className="text-sm text-foreground">{a.texto}</div>
-                </li>
-              ))}
-            </ol>
+            {atividades.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Sem atividades registradas ainda.</p>
+            ) : (
+              <ol className="space-y-3 border-l border-border ml-2">
+                {atividades.map((a) => (
+                  <li key={a.id} className="relative pl-5">
+                    <span className="absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full bg-[var(--gold)] ring-4 ring-card" />
+                    <div className="text-xs text-muted-foreground">{new Date(a.created_at).toLocaleString("pt-BR")}</div>
+                    <div className="text-sm text-foreground">{a.texto}</div>
+                  </li>
+                ))}
+              </ol>
+            )}
           </div>
 
           <div className="flex gap-2 pt-2">
-            <Button className="flex-1 gap-2 bg-primary hover:bg-[var(--primary-hover)]" onClick={() => toast.success("Convertido em cliente!")}>
+            <Button
+              className="flex-1 gap-2 bg-primary hover:bg-[var(--primary-hover)]"
+              disabled={converting || !!lead.converted_cliente_id}
+              onClick={converterEmCliente}
+            >
               <UserPlus className="h-4 w-4" />
-              Converter em cliente
+              {lead.converted_cliente_id ? "Já convertido" : converting ? "Convertendo…" : "Converter em cliente"}
             </Button>
           </div>
         </div>
@@ -295,8 +389,8 @@ function SearchLeadsDialog({ open, onOpenChange }: { open: boolean; onOpenChange
       setProgress(100);
       setLoading(false);
       onOpenChange(false);
-      toast.success("9 novos leads capturados via Apify");
-    }, 3200);
+      toast.info("Busca via Apify ainda não está configurada — adicione o token nas Configurações.");
+    }, 1600);
   };
 
   return (

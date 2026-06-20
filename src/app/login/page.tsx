@@ -3,18 +3,28 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("ana.silva@dsrhidraupecas.com.br");
-  const [pass, setPass] = useState("••••••••••");
+  const [email, setEmail] = useState("");
+  const [pass, setPass] = useState("");
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => router.push("/"), 700);
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
+    setLoading(false);
+    if (error) {
+      toast.error("Não foi possível entrar", { description: "Verifique seu e-mail e senha." });
+      return;
+    }
+    router.push("/");
+    router.refresh();
   };
 
   return (

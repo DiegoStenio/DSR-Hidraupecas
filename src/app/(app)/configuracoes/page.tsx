@@ -1,16 +1,53 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Eye, EyeOff, Sparkles, Upload, Image as ImageIcon, Crown, Check } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
+import { createClient } from "@/lib/supabase/client";
+import type { CompanySettings } from "@/lib/supabase/types";
 import { toast } from "sonner";
 
 export default function ConfigPage() {
+  const supabase = createClient();
+  const [settings, setSettings] = useState<CompanySettings | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase
+      .from("company_settings")
+      .select("*")
+      .limit(1)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (error) toast.error("Erro ao carregar configurações", { description: error.message });
+        else setSettings(data);
+        setLoading(false);
+      });
+  }, [supabase]);
+
+  const save = async (patch: Partial<CompanySettings>) => {
+    if (!settings) return;
+    const { data, error } = await supabase
+      .from("company_settings").update(patch).eq("id", settings.id).select().single();
+    if (error) { toast.error("Erro ao salvar", { description: error.message }); return; }
+    setSettings(data);
+    toast.success("Configurações salvas");
+  };
+
+  if (loading || !settings) {
+    return (
+      <div className="space-y-6 max-w-[1100px]">
+        <PageHeader title="Configurações" subtitle="Gerencie empresa, integrações e preferências." />
+        <Skeleton className="h-80 rounded-2xl" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 max-w-[1100px]">
       <PageHeader title="Configurações" subtitle="Gerencie empresa, integrações e preferências." />
@@ -26,24 +63,7 @@ export default function ConfigPage() {
         </TabsList>
 
         <TabsContent value="empresa" className="mt-5">
-          <SectionCard
-            title="Dados da empresa"
-            subtitle="Aparecem no PDF de orçamento e no cabeçalho do app."
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field label="Razão social" defaultValue="DSR-Hidraupecas Ltda." />
-              <Field label="CNPJ" defaultValue="22.345.678/0001-90" />
-              <Field label="E-mail" defaultValue="contato@dsrhidraupecas.com.br" />
-              <Field label="Telefone" defaultValue="+55 11 3344-5566" />
-              <div className="md:col-span-2">
-                <Field label="Endereço" defaultValue="R. das Indústrias 1240, Guarulhos/SP, CEP 07020-100" />
-              </div>
-            </div>
-            <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <UploadBox label="Logo / cabeçalho do PDF" />
-              <UploadBox label="Imagem de fundo do app" />
-            </div>
-          </SectionCard>
+          <EmpresaForm settings={settings} onSave={save} />
         </TabsContent>
 
         <TabsContent value="pagamento" className="mt-5">
@@ -51,7 +71,7 @@ export default function ConfigPage() {
             <UploadBox label="QR Code Pix" hint="PNG ou JPG · até 2MB" />
             <div className="mt-4 grid gap-1.5 max-w-md">
               <Label>Chave Pix</Label>
-              <Input defaultValue="22.345.678/0001-90" />
+              <Input defaultValue={settings.pix_chave ?? ""} onBlur={(e) => save({ pix_chave: e.target.value })} />
             </div>
           </SectionCard>
         </TabsContent>
@@ -63,8 +83,8 @@ export default function ConfigPage() {
               <Button variant="outline" className="gap-2"><Upload className="h-4 w-4" />Alterar foto</Button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field label="Nome" defaultValue="Ana Silva" />
-              <Field label="E-mail" defaultValue="ana.silva@dsrhidraupecas.com.br" />
+              <Field label="Nome" defaultValue="Diego" />
+              <Field label="E-mail" defaultValue="dsr.diego09@gmail.com" />
             </div>
           </SectionCard>
         </TabsContent>
@@ -74,7 +94,7 @@ export default function ConfigPage() {
             title={<span className="flex items-center gap-2">Provedor de IA<span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md bg-[var(--gold)]/15 text-[var(--gold)] border border-[var(--gold)]/30">Premium</span></span>}
             subtitle="Modelo usado para scoring de leads, resumos e sugestões de mensagem."
           >
-            <AiProviderToggle />
+            <AiProviderToggle value={settings.ai_provider} onChange={(p) => save({ ai_provider: p })} />
           </SectionCard>
 
           <SectionCard
@@ -86,6 +106,50 @@ export default function ConfigPage() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+function EmpresaForm({ settings, onSave }: { settings: CompanySettings; onSave: (p: Partial<CompanySettings>) => void }) {
+  const [form, setForm] = useState({
+    nome: settings.nome ?? "", cnpj: settings.cnpj ?? "", email: settings.email ?? "",
+    telefone: settings.telefone ?? "", endereco: settings.endereco ?? "",
+  });
+
+  return (
+    <SectionCard
+      title="Dados da empresa"
+      subtitle="Aparecem no PDF de orçamento e no cabeçalho do app."
+    >
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid gap-1.5">
+          <Label>Razão social</Label>
+          <Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label>CNPJ</Label>
+          <Input value={form.cnpj} onChange={(e) => setForm({ ...form, cnpj: e.target.value })} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label>E-mail</Label>
+          <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label>Telefone</Label>
+          <Input value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} />
+        </div>
+        <div className="md:col-span-2 grid gap-1.5">
+          <Label>Endereço</Label>
+          <Input value={form.endereco} onChange={(e) => setForm({ ...form, endereco: e.target.value })} />
+        </div>
+      </div>
+      <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <UploadBox label="Logo / cabeçalho do PDF" />
+        <UploadBox label="Imagem de fundo do app" />
+      </div>
+      <div className="mt-5 flex justify-end">
+        <Button onClick={() => onSave(form)} className="bg-primary hover:bg-[var(--primary-hover)]">Salvar alterações</Button>
+      </div>
+    </SectionCard>
   );
 }
 
@@ -123,20 +187,19 @@ function UploadBox({ label, hint }: { label: string; hint?: string }) {
   );
 }
 
-function AiProviderToggle() {
-  const [provider, setProvider] = useState<"gemini" | "claude">("gemini");
+function AiProviderToggle({ value, onChange }: { value: "gemini" | "claude"; onChange: (p: "gemini" | "claude") => void }) {
   const providers = [
-    { id: "gemini" as const, name: "Google Gemini", desc: "1.5 Pro · Multimodal · Custo-benefício" },
-    { id: "claude" as const, name: "Anthropic Claude", desc: "3.5 Sonnet · Raciocínio profundo" },
+    { id: "gemini" as const, name: "Google Gemini", desc: "2.5 Flash · Multimodal · Custo-benefício" },
+    { id: "claude" as const, name: "Anthropic Claude", desc: "Sonnet · Raciocínio profundo" },
   ];
   return (
     <div className="grid sm:grid-cols-2 gap-3">
       {providers.map(p => {
-        const active = provider === p.id;
+        const active = value === p.id;
         return (
           <button
             key={p.id}
-            onClick={() => { setProvider(p.id); toast.success(`${p.name} ativado`); }}
+            onClick={() => onChange(p.id)}
             className={`relative rounded-xl border p-4 text-left transition-all ${
               active ? "border-[var(--gold)] bg-[var(--gold)]/5 shadow-sm" : "border-border bg-background hover:border-foreground/20"
             }`}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search, Plus, Building2, User, Sparkles, AlertTriangle, TrendingUp, FileText, Pencil, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
@@ -15,31 +15,93 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { clientes as seedClientes, orcamentos as seedOrc, type Cliente } from "@/lib/mock-data";
+import { Skeleton } from "@/components/ui/skeleton";
+import { createClient } from "@/lib/supabase/client";
+import type { Cliente, Orcamento } from "@/lib/supabase/types";
 import { toast } from "sonner";
 
+type ClienteForm = {
+  id?: string;
+  tipo: "PF" | "PJ";
+  nome: string;
+  documento: string;
+  telefone: string;
+  email: string;
+  cidade: string;
+  estado: string;
+  observacoes: string;
+};
+
+const emptyForm: ClienteForm = {
+  tipo: "PJ", nome: "", documento: "", telefone: "", email: "", cidade: "", estado: "", observacoes: "",
+};
+
 export default function ClientesPage() {
-  const [list, setList] = useState<Cliente[]>(seedClientes);
+  const supabase = createClient();
+  const [list, setList] = useState<Cliente[]>([]);
+  const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<Cliente | null>(null);
   const [creating, setCreating] = useState(false);
   const [viewing, setViewing] = useState<Cliente | null>(null);
   const [deleting, setDeleting] = useState<Cliente | null>(null);
 
+  useEffect(() => {
+    supabase
+      .from("clientes")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .then(({ data, error }) => {
+        if (error) toast.error("Erro ao carregar clientes", { description: error.message });
+        else setList(data ?? []);
+        setLoading(false);
+      });
+  }, [supabase]);
+
   const filtered = useMemo(() => {
     const s = q.toLowerCase();
     return list.filter(c =>
       c.nome.toLowerCase().includes(s) ||
       c.documento.toLowerCase().includes(s) ||
-      c.telefone.includes(s)
+      (c.telefone ?? "").includes(s)
     );
   }, [list, q]);
+
+  const handleSave = async (form: ClienteForm) => {
+    if (form.id) {
+      const { data, error } = await supabase.from("clientes").update({
+        tipo: form.tipo, nome: form.nome, documento: form.documento, telefone: form.telefone,
+        email: form.email, cidade: form.cidade, estado: form.estado, observacoes: form.observacoes,
+      }).eq("id", form.id).select().single();
+      if (error) { toast.error("Erro ao atualizar", { description: error.message }); return; }
+      setList(l => l.map(x => x.id === form.id ? data : x));
+      toast.success("Cliente atualizado");
+    } else {
+      const { data, error } = await supabase.from("clientes").insert({
+        tipo: form.tipo, nome: form.nome, documento: form.documento, telefone: form.telefone,
+        email: form.email, cidade: form.cidade, estado: form.estado, observacoes: form.observacoes,
+      }).select().single();
+      if (error) { toast.error("Erro ao criar", { description: error.message }); return; }
+      setList(l => [data, ...l]);
+      toast.success("Cliente criado");
+    }
+    setCreating(false); setEditing(null);
+  };
+
+  const handleDelete = async () => {
+    if (!deleting) return;
+    const { error } = await supabase.from("clientes").delete().eq("id", deleting.id);
+    if (error) { toast.error("Erro ao excluir", { description: error.message }); setDeleting(null); return; }
+    setList(l => l.filter(c => c.id !== deleting.id));
+    toast.success("Cliente excluído");
+    setDeleting(null);
+  };
 
   return (
     <div className="space-y-6 max-w-[1300px]">
       <PageHeader
         title="Clientes"
-        subtitle={`${list.length} cadastrados · busque por nome, CPF/CNPJ ou telefone`}
+        subtitle={loading ? "Carregando…" : `${list.length} cadastrados · busque por nome, CPF/CNPJ ou telefone`}
         actions={
           <Button onClick={() => setCreating(true)} className="gap-2 bg-primary hover:bg-[var(--primary-hover)]">
             <Plus className="h-4 w-4" /> Adicionar cliente
@@ -56,7 +118,11 @@ export default function ClientesPage() {
         />
       </div>
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="space-y-3">
+          {[0, 1, 2].map(i => <Skeleton key={i} className="h-16 rounded-2xl" />)}
+        </div>
+      ) : filtered.length === 0 ? (
         <EmptyState onAdd={() => setCreating(true)} />
       ) : (
         <>
@@ -130,12 +196,7 @@ export default function ClientesPage() {
         open={creating || editing !== null}
         cliente={editing}
         onClose={() => { setCreating(false); setEditing(null); }}
-        onSave={(c) => {
-          if (editing) setList((l) => l.map(x => x.id === editing.id ? c : x));
-          else setList((l) => [{ ...c, id: `c${Date.now()}` }, ...l]);
-          toast.success(editing ? "Cliente atualizado" : "Cliente criado");
-          setCreating(false); setEditing(null);
-        }}
+        onSave={handleSave}
       />
 
       <ClienteViewDialog cliente={viewing} onClose={() => setViewing(null)} />
@@ -152,10 +213,7 @@ export default function ClientesPage() {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive hover:bg-destructive/90"
-              onClick={() => {
-                if (deleting) { setList(l => l.filter(c => c.id !== deleting.id)); toast.success("Cliente excluído"); }
-                setDeleting(null);
-              }}
+              onClick={handleDelete}
             >Excluir</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -179,19 +237,19 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 
 function ClienteFormDialog({
   open, cliente, onClose, onSave,
-}: { open: boolean; cliente: Cliente | null; onClose: () => void; onSave: (c: Cliente) => void }) {
-  const [form, setForm] = useState<Cliente>(() => cliente ?? {
-    id: "", tipo: "PJ", nome: "", documento: "", telefone: "", email: "",
-    cidade: "", estado: "", observacoes: "",
-    iaRisco: "baixo", iaUpsell: [], iaResumo: "",
-  });
-  // Re-init when cliente changes
-  useMemo(() => {
-    if (cliente) setForm(cliente);
-    else if (open) setForm({
-      id: "", tipo: "PJ", nome: "", documento: "", telefone: "", email: "",
-      cidade: "", estado: "", observacoes: "", iaRisco: "baixo", iaUpsell: [], iaResumo: "",
-    });
+}: { open: boolean; cliente: Cliente | null; onClose: () => void; onSave: (c: ClienteForm) => void }) {
+  const [form, setForm] = useState<ClienteForm>(emptyForm);
+
+  useEffect(() => {
+    if (cliente) {
+      setForm({
+        id: cliente.id, tipo: cliente.tipo, nome: cliente.nome, documento: cliente.documento,
+        telefone: cliente.telefone ?? "", email: cliente.email ?? "", cidade: cliente.cidade ?? "",
+        estado: cliente.estado ?? "", observacoes: cliente.observacoes ?? "",
+      });
+    } else if (open) {
+      setForm(emptyForm);
+    }
   }, [cliente, open]);
 
   return (
@@ -246,7 +304,7 @@ function ClienteFormDialog({
 
           <div className="grid gap-1.5">
             <Label>Observações</Label>
-            <Textarea rows={3} value={form.observacoes ?? ""} onChange={(e) => setForm({ ...form, observacoes: e.target.value })} />
+            <Textarea rows={3} value={form.observacoes} onChange={(e) => setForm({ ...form, observacoes: e.target.value })} />
           </div>
         </div>
 
@@ -260,13 +318,31 @@ function ClienteFormDialog({
 }
 
 function ClienteViewDialog({ cliente, onClose }: { cliente: Cliente | null; onClose: () => void }) {
+  const supabase = createClient();
+  const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
+  const [loadingOrc, setLoadingOrc] = useState(false);
+
+  useEffect(() => {
+    if (!cliente) return;
+    setLoadingOrc(true);
+    supabase
+      .from("orcamentos")
+      .select("*")
+      .eq("cliente_id", cliente.id)
+      .order("data", { ascending: false })
+      .then(({ data, error }) => {
+        if (error) toast.error("Erro ao carregar orçamentos do cliente", { description: error.message });
+        else setOrcamentos(data ?? []);
+        setLoadingOrc(false);
+      });
+  }, [cliente, supabase]);
+
   if (!cliente) return null;
-  const meusOrc = seedOrc.filter(o => o.clienteId === cliente.id);
   const risco = {
     baixo: { cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20", label: "Baixo risco" },
     medio: { cls: "bg-amber-500/10 text-amber-600 border-amber-500/20", label: "Risco médio" },
     alto:  { cls: "bg-rose-500/10 text-rose-600 border-rose-500/20", label: "Alto risco" },
-  }[cliente.iaRisco];
+  }[cliente.ia_risco];
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -281,32 +357,37 @@ function ClienteViewDialog({ cliente, onClose }: { cliente: Cliente | null; onCl
         <Tabs defaultValue="dados" className="mt-2">
           <TabsList className="bg-muted">
             <TabsTrigger value="dados">Dados</TabsTrigger>
-            <TabsTrigger value="orcamentos">Orçamentos ({meusOrc.length})</TabsTrigger>
+            <TabsTrigger value="orcamentos">Orçamentos ({orcamentos.length})</TabsTrigger>
             <TabsTrigger value="ia" className="gap-1.5">
               <Sparkles className="h-3.5 w-3.5 text-[var(--gold)]" />Análise de IA
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="dados" className="mt-4 space-y-3 text-sm">
-            <Row k="Telefone" v={cliente.telefone} />
-            <Row k="E-mail" v={cliente.email} />
-            <Row k="Endereço" v={`${cliente.cidade} / ${cliente.estado}`} />
+            <Row k="Telefone" v={cliente.telefone ?? "—"} />
+            <Row k="E-mail" v={cliente.email ?? "—"} />
+            <Row k="Endereço" v={`${cliente.cidade ?? "—"} / ${cliente.estado ?? "—"}`} />
             {cliente.observacoes && <Row k="Observações" v={cliente.observacoes} />}
           </TabsContent>
 
           <TabsContent value="orcamentos" className="mt-4">
-            {meusOrc.length === 0 ? (
+            {loadingOrc ? (
+              <div className="space-y-2">
+                <Skeleton className="h-14 rounded-xl" />
+                <Skeleton className="h-14 rounded-xl" />
+              </div>
+            ) : orcamentos.length === 0 ? (
               <div className="py-8 text-center text-sm text-muted-foreground">
                 <FileText className="h-6 w-6 mx-auto mb-2 opacity-60" />
                 Nenhum orçamento ainda para este cliente.
               </div>
             ) : (
               <div className="space-y-2">
-                {meusOrc.map(o => (
+                {orcamentos.map(o => (
                   <div key={o.id} className="flex items-center justify-between rounded-xl border border-border p-3">
                     <div>
                       <div className="text-sm font-medium text-foreground">{o.numero}</div>
-                      <div className="text-xs text-muted-foreground">{o.data} · {o.vendedorNome}</div>
+                      <div className="text-xs text-muted-foreground">{o.data} · {o.vendedor_nome}</div>
                     </div>
                     <div className="text-right">
                       <div className="font-display text-lg font-semibold tabular-nums">
@@ -329,20 +410,24 @@ function ClienteViewDialog({ cliente, onClose }: { cliente: Cliente | null; onCl
             </div>
             <div className="rounded-xl bg-muted/50 p-4">
               <h4 className="text-xs uppercase tracking-wider text-muted-foreground mb-1.5">Resumo do histórico</h4>
-              <p className="text-sm text-foreground leading-relaxed">{cliente.iaResumo}</p>
+              <p className="text-sm text-foreground leading-relaxed">{cliente.ia_resumo ?? "Ainda sem análise de IA gerada para este cliente."}</p>
             </div>
             <div>
               <h4 className="text-xs uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
                 <TrendingUp className="h-3.5 w-3.5 text-[var(--gold)]" />Oportunidades de upsell
               </h4>
-              <ul className="space-y-1.5">
-                {cliente.iaUpsell.map((u, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-foreground">
-                    <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-[var(--gold)] shrink-0" />
-                    {u}
-                  </li>
-                ))}
-              </ul>
+              {cliente.ia_upsell.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nenhuma sugestão gerada ainda.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {cliente.ia_upsell.map((u, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-foreground">
+                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-[var(--gold)] shrink-0" />
+                      {u}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </TabsContent>
         </Tabs>
