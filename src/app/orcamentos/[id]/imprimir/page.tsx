@@ -111,10 +111,8 @@ export default function ImprimirOrcamentoPage() {
       <div ref={printRef} className="w-[210mm] mx-auto bg-white text-black shadow-lg font-sans text-xs">
         <header className="bg-[#0B1F3A] text-white p-8 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {settings?.logo_url && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={settings.logo_url} alt="Logo" className="h-12 w-12 object-contain rounded-md bg-white/10 p-1" crossOrigin="anonymous" />
-            )}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-dsr-dark.png" alt="Logo" className="h-14 w-14 object-contain shrink-0" />
             <div className="space-y-0.5">
               <h1 className="text-xl font-bold uppercase">{settings?.nome || "Empresa"}</h1>
               {settings?.cnpj && <p className="text-xs">CNPJ: {settings.cnpj}</p>}

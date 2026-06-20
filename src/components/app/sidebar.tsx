@@ -54,9 +54,8 @@ export function Sidebar({ mobileOpen, onCloseMobile }: { mobileOpen: boolean; on
         {/* Brand */}
         <div className="flex items-center justify-between px-5 py-6 border-b border-[var(--sidebar-border)]">
           <Link href="/" className="flex items-center gap-2 min-w-0" onClick={onCloseMobile}>
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--gold)] text-[var(--gold-foreground)] font-display text-lg font-bold">
-              D
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-dsr-dark.png" alt="DSR Hidraupeças" className="h-9 w-9 shrink-0 object-contain" />
             {!collapsed && (
               <div className="min-w-0">
                 <div className="font-display text-base font-semibold tracking-tight truncate">
