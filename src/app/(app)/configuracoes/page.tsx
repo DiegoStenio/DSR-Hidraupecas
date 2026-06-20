@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Sparkles, Upload, Image as ImageIcon, Crown, Check } from "lucide-react";
+import { Sparkles, Upload, Image as ImageIcon, Crown, Check, ExternalLink, AlertTriangle } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -121,6 +121,13 @@ export default function ConfigPage() {
             subtitle="Necessário para buscar novos leads automaticamente."
           >
             <ApifyToken />
+          </SectionCard>
+
+          <SectionCard
+            title="Consumo de APIs"
+            subtitle="Acompanhe o uso do mês pra saber quando vale adicionar créditos."
+          >
+            <ConsumoApis />
           </SectionCard>
         </TabsContent>
       </Tabs>
@@ -306,6 +313,124 @@ function ApifyToken() {
           <p className="text-sm text-foreground">Conectado · busca de leads ativa.</p>
         </div>
       )}
+    </div>
+  );
+}
+
+type UsoApi = {
+  configured: boolean;
+  usageUsd?: number;
+  limitUsd?: number;
+  cycleEndsAt?: string;
+  error?: string;
+};
+
+function ConsumoApis() {
+  const [data, setData] = useState<{ apify: UsoApi; gemini: { configured: boolean } } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/integracoes/uso")
+      .then((r) => r.json())
+      .then(setData)
+      .catch(() => setData({ apify: { configured: false }, gemini: { configured: false } }))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading || !data) {
+    return (
+      <div className="space-y-3">
+        <Skeleton className="h-24 rounded-xl" />
+        <Skeleton className="h-24 rounded-xl" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <UsoCard
+        nome="Apify"
+        desc="Busca de leads (Google Maps Scraper)"
+        configured={data.apify.configured}
+        error={data.apify.error}
+        usageUsd={data.apify.usageUsd}
+        limitUsd={data.apify.limitUsd}
+        cycleEndsAt={data.apify.cycleEndsAt}
+        rechargeUrl="https://console.apify.com/billing"
+        rechargeLabel="Adicionar créditos"
+      />
+      <UsoCard
+        nome="Google Gemini"
+        desc="Geração de termos de busca e análises de IA"
+        configured={data.gemini.configured}
+        rechargeUrl="https://aistudio.google.com/usage"
+        rechargeLabel="Ver uso e cobrança"
+        note="O consumo detalhado não é exposto pela chave de API — confira direto no painel do Google."
+      />
+    </div>
+  );
+}
+
+function UsoCard({
+  nome, desc, configured, error, usageUsd, limitUsd, cycleEndsAt, rechargeUrl, rechargeLabel, note,
+}: {
+  nome: string;
+  desc: string;
+  configured: boolean;
+  error?: string;
+  usageUsd?: number;
+  limitUsd?: number;
+  cycleEndsAt?: string;
+  rechargeUrl: string;
+  rechargeLabel: string;
+  note?: string;
+}) {
+  const pct = usageUsd != null && limitUsd ? Math.min(100, (usageUsd / limitUsd) * 100) : null;
+  const proximoLimite = pct !== null && pct >= 80;
+
+  return (
+    <div className="rounded-xl border border-border bg-background p-4">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <div className="font-medium text-foreground text-sm flex items-center gap-2">
+            <span className={`h-1.5 w-1.5 rounded-full ${configured ? "bg-emerald-500" : "bg-muted-foreground/40"}`} />
+            {nome}
+          </div>
+          <div className="text-xs text-muted-foreground mt-0.5">{desc}</div>
+        </div>
+        <a href={rechargeUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
+          <Button size="sm" variant="outline" className="gap-1.5">
+            <ExternalLink className="h-3.5 w-3.5" />{rechargeLabel}
+          </Button>
+        </a>
+      </div>
+
+      {!configured ? (
+        <p className="text-xs text-muted-foreground">Não configurado.</p>
+      ) : error ? (
+        <p className="text-xs text-rose-600">{error}</p>
+      ) : pct !== null ? (
+        <>
+          <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${proximoLimite ? "bg-rose-500" : "bg-[var(--gold)]"}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
+            <span>${usageUsd!.toFixed(2)} de ${limitUsd!.toFixed(2)} usados neste ciclo</span>
+            {cycleEndsAt && <span>Renova em {new Date(cycleEndsAt).toLocaleDateString("pt-BR")}</span>}
+          </div>
+          {proximoLimite && (
+            <p className="mt-2 flex items-center gap-1.5 text-xs text-rose-600 font-medium">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Perto do limite do mês — considere adicionar créditos.
+            </p>
+          )}
+        </>
+      ) : note ? (
+        <p className="text-xs text-muted-foreground">{note}</p>
+      ) : null}
     </div>
   );
 }

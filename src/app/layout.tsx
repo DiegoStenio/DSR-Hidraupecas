@@ -1,13 +1,22 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Toaster } from 'sonner';
 
 export const metadata: Metadata = {
   title: 'DSR-Hidraupecas — Gestão',
   description: 'Painel interno de orçamentos, leads e clientes da DSR-Hidraupecas.',
+  manifest: '/manifest.webmanifest',
   icons: {
-    icon: '/Icone.png',
+    icon: [
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: '/apple-touch-icon.png',
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#0b1f3a',
 };
 
 export default function RootLayout({
