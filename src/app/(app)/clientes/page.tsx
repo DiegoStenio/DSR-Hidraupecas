@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, Plus, Building2, User, Sparkles, AlertTriangle, TrendingUp, FileText, Pencil, Trash2 } from "lucide-react";
+import { Search, Plus, Building2, User, Sparkles, AlertTriangle, TrendingUp, FileText, Pencil, Trash2, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -207,7 +207,14 @@ export default function ClientesPage() {
         onSave={handleSave}
       />
 
-      <ClienteViewDialog cliente={viewing} onClose={() => setViewing(null)} />
+      <ClienteViewDialog
+        cliente={viewing}
+        onClose={() => setViewing(null)}
+        onAnalisado={(updated) => {
+          setList((l) => l.map((c) => (c.id === updated.id ? updated : c)));
+          setViewing(updated);
+        }}
+      />
 
       <AlertDialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>
         <AlertDialogContent>
@@ -366,10 +373,13 @@ function ClienteFormDialog({
   );
 }
 
-function ClienteViewDialog({ cliente, onClose }: { cliente: Cliente | null; onClose: () => void }) {
+function ClienteViewDialog({
+  cliente, onClose, onAnalisado,
+}: { cliente: Cliente | null; onClose: () => void; onAnalisado: (cliente: Cliente) => void }) {
   const supabase = createClient();
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
   const [loadingOrc, setLoadingOrc] = useState(false);
+  const [analisando, setAnalisando] = useState(false);
 
   useEffect(() => {
     if (!cliente) return;
@@ -385,6 +395,22 @@ function ClienteViewDialog({ cliente, onClose }: { cliente: Cliente | null; onCl
         setLoadingOrc(false);
       });
   }, [cliente, supabase]);
+
+  const gerarAnalise = async () => {
+    if (!cliente) return;
+    setAnalisando(true);
+    try {
+      const res = await fetch(`/api/clientes/${cliente.id}/analisar`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) { toast.error("Erro ao gerar análise", { description: json.error }); return; }
+      onAnalisado(json.cliente);
+      toast.success("Análise gerada");
+    } catch (err) {
+      toast.error("Erro ao gerar análise", { description: err instanceof Error ? err.message : "Tente novamente." });
+    } finally {
+      setAnalisando(false);
+    }
+  };
 
   if (!cliente) return null;
   const risco = {
@@ -455,13 +481,23 @@ function ClienteViewDialog({ cliente, onClose }: { cliente: Cliente | null; onCl
           </TabsContent>
 
           <TabsContent value="ia" className="mt-4 space-y-4">
-            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium ${risco.cls}`}>
-              <AlertTriangle className="h-3.5 w-3.5" />
-              {risco.label} de perda
+            <div className="flex items-center justify-between gap-3">
+              {cliente.ia_resumo ? (
+                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium ${risco.cls}`}>
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  {risco.label} de perda
+                </div>
+              ) : <div />}
+              <Button size="sm" variant="outline" className="gap-2" disabled={analisando} onClick={gerarAnalise}>
+                {analisando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                {cliente.ia_resumo ? "Atualizar análise" : "Gerar análise"}
+              </Button>
             </div>
             <div className="rounded-xl bg-muted/50 p-4">
               <h4 className="text-xs uppercase tracking-wider text-muted-foreground mb-1.5">Resumo do histórico</h4>
-              <p className="text-sm text-foreground leading-relaxed">{cliente.ia_resumo ?? "Ainda sem análise de IA gerada para este cliente."}</p>
+              <p className="text-sm text-foreground leading-relaxed">
+                {cliente.ia_resumo ?? (analisando ? "Gerando análise com IA…" : "Ainda sem análise de IA gerada para este cliente.")}
+              </p>
             </div>
             <div>
               <h4 className="text-xs uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">

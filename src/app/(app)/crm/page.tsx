@@ -229,6 +229,10 @@ export default function CrmPage() {
         onConverted={(field, id) => {
           setLeads((ls) => ls.map((l) => (l.id === active?.id ? { ...l, [field]: id } : l)));
         }}
+        onAnalisado={(updated) => {
+          setLeads((ls) => ls.map((l) => (l.id === updated.id ? updated : l)));
+          setActive(updated);
+        }}
       />
       <SearchLeadsDialog
         open={searchOpen}
@@ -334,12 +338,14 @@ function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
           </span>
         )}
       </div>
-      <div className="mt-2 flex items-center justify-end">
-        <span className={`inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-md border font-medium ${badge.cls}`}>
-          {badge.dot && <span className="h-1.5 w-1.5 rounded-full bg-current pulse-dot" />}
-          {badge.label}
-        </span>
-      </div>
+      {lead.score && (
+        <div className="mt-2 flex items-center justify-end">
+          <span className={`inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-md border font-medium ${badge.cls}`}>
+            {badge.dot && <span className="h-1.5 w-1.5 rounded-full bg-current pulse-dot" />}
+            {badge.label}
+          </span>
+        </div>
+      )}
     </button>
   );
 }
@@ -473,15 +479,17 @@ function AddEtapaDialog({ open, onClose, onAdd }: { open: boolean; onClose: () =
 }
 
 function LeadDrawer({
-  lead, onClose, onConverted,
+  lead, onClose, onConverted, onAnalisado,
 }: {
   lead: Lead | null;
   onClose: () => void;
   onConverted: (field: "converted_cliente_id" | "converted_prestador_id", id: string) => void;
+  onAnalisado: (lead: Lead) => void;
 }) {
   const supabase = createClient();
   const [atividades, setAtividades] = useState<LeadAtividade[]>([]);
   const [converting, setConverting] = useState(false);
+  const [analisando, setAnalisando] = useState(false);
 
   useEffect(() => {
     if (!lead) return;
@@ -498,6 +506,21 @@ function LeadDrawer({
 
   if (!lead) return null;
   const badge = scoreBadge(lead.score);
+
+  const gerarAnalise = async () => {
+    setAnalisando(true);
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/analisar`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) { toast.error("Erro ao gerar análise", { description: json.error }); return; }
+      onAnalisado(json.lead);
+      toast.success("Análise gerada");
+    } catch (err) {
+      toast.error("Erro ao gerar análise", { description: err instanceof Error ? err.message : "Tente novamente." });
+    } finally {
+      setAnalisando(false);
+    }
+  };
   const copy = () => {
     navigator.clipboard.writeText(lead.sugestao_whatsapp ?? "");
     toast.success("Mensagem copiada!");
@@ -602,14 +625,20 @@ function LeadDrawer({
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="h-4 w-4 text-[var(--gold)]" strokeWidth={1.5} />
               <h3 className="text-sm font-semibold text-foreground">Análise de IA</h3>
-              <span className={`ml-auto inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-md border font-medium ${badge.cls}`}>
-                {badge.dot && <span className="h-1.5 w-1.5 rounded-full bg-current pulse-dot" />}
-                {badge.label}
-              </span>
+              {lead.score && (
+                <span className={`ml-auto inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-md border font-medium ${badge.cls}`}>
+                  {badge.dot && <span className="h-1.5 w-1.5 rounded-full bg-current pulse-dot" />}
+                  {badge.label}
+                </span>
+              )}
             </div>
             <p className="text-sm leading-relaxed text-foreground/90 mb-4">
-              {lead.score_justificativa ?? "Ainda sem análise de IA gerada para este lead."}
+              {lead.score_justificativa ?? (analisando ? "Gerando análise com IA…" : "Ainda sem análise de IA gerada para este lead.")}
             </p>
+            <Button size="sm" variant="outline" className="gap-2 mb-4" disabled={analisando} onClick={gerarAnalise}>
+              {analisando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              {lead.score_justificativa ? "Atualizar análise" : "Gerar análise"}
+            </Button>
             {lead.sugestao_whatsapp && (
               <div className="rounded-xl bg-card border border-border p-3">
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center justify-between">
