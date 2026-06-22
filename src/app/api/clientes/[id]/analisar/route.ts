@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { analisarClienteFlow } from "@/ai/flows/analisar-cliente";
+import type { ItemOrcamento } from "@/lib/supabase/types";
 
 export const maxDuration = 30;
 
@@ -14,7 +15,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
   const [clienteRes, orcRes, settingsRes] = await Promise.all([
     supabase.from("clientes").select("*").eq("id", id).single(),
-    supabase.from("orcamentos").select("status, total, data").eq("cliente_id", id).order("data", { ascending: false }),
+    supabase.from("orcamentos").select("status, total, data, itens, observacao").eq("cliente_id", id).order("data", { ascending: false }),
     supabase.from("company_settings").select("contexto_negocio").limit(1).maybeSingle(),
   ]);
 
@@ -28,6 +29,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     ? Math.floor((Date.now() - new Date(orcamentos[0].data).getTime()) / (1000 * 60 * 60 * 24))
     : null;
 
+  const itensOrcados = orcamentos.flatMap((o) =>
+    ((o.itens ?? []) as ItemOrcamento[]).map((it) => `${it.descricao} (qtd ${it.qtd}) — orçamento ${o.status}`),
+  );
+  const observacoesOrcamentos = orcamentos.map((o) => o.observacao).filter((o): o is string => !!o);
+
   try {
     const result = await analisarClienteFlow({
       contextoNegocio: settingsRes.data?.contexto_negocio ?? undefined,
@@ -40,6 +46,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       orcamentosPendentes: orcamentos.length - realizados.length,
       valorTotalRealizado: realizados.reduce((s, o) => s + o.total, 0),
       diasDesdeUltimoOrcamento,
+      itensOrcados,
+      observacoesOrcamentos,
     });
 
     const { data: updated, error } = await supabase

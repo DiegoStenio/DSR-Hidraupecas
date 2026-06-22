@@ -12,6 +12,8 @@ const inputSchema = z.object({
   orcamentosPendentes: z.number(),
   valorTotalRealizado: z.number(),
   diasDesdeUltimoOrcamento: z.number().nullable().optional(),
+  itensOrcados: z.array(z.string()).describe("Itens/peças/serviços já orçados pra esse cliente, com a quantidade e o status do orçamento."),
+  observacoesOrcamentos: z.array(z.string()).describe("Observações livres anotadas nos orçamentos desse cliente."),
 });
 
 const outputSchema = z.object({
@@ -40,8 +42,12 @@ Cliente a avaliar:
 - Total de orçamentos: ${input.totalOrcamentos} (${input.orcamentosRealizados} realizados, ${input.orcamentosPendentes} pendentes)
 - Valor total já realizado: ${input.valorTotalRealizado.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
 - Dias desde o último orçamento: ${input.diasDesdeUltimoOrcamento ?? "nunca teve orçamento"}
+- Itens/peças/serviços já orçados: ${input.itensOrcados.length > 0 ? input.itensOrcados.join("; ") : "nenhum item registrado"}
+- Observações anotadas nos orçamentos: ${input.observacoesOrcamentos.length > 0 ? input.observacoesOrcamentos.join("; ") : "nenhuma"}
 
-Avalie o risco de perda desse cliente (baixo/medio/alto), escreva um resumo curto do comportamento dele, e sugira de 0 a 3 oportunidades concretas de upsell ou reativação. Se não houver histórico suficiente, diga isso no resumo e não force oportunidades genéricas.`,
+Avalie o risco de perda desse cliente (baixo/medio/alto) e escreva um resumo curto do comportamento dele.
+
+Para as oportunidades de upsell, baseie-se EXCLUSIVAMENTE nos itens/peças/serviços já orçados acima — sugira peças complementares, consumíveis recorrentes, manutenção preventiva da MESMA linha de equipamento, ou upgrade de uma peça específica que ele já comprou. Não sugira nada genérico ou desconectado do que ele realmente orçou. Se a lista de itens orçados estiver vazia ou for muito genérica pra sugerir algo concreto, retorne uma lista vazia e diga no resumo que não há histórico suficiente pra recomendar upsell.`,
       output: { schema: outputSchema },
     });
     return output!;
