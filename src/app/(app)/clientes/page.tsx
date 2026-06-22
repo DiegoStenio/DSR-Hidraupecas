@@ -470,7 +470,9 @@ function ClienteViewDialog({
                       <div className="font-display text-lg font-semibold tabular-nums">
                         {o.total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                       </div>
-                      <div className={`text-[10px] uppercase tracking-wider ${o.status === "realizado" ? "text-emerald-600" : "text-amber-600"}`}>
+                      <div className={`text-[10px] uppercase tracking-wider ${
+                        o.status === "realizado" ? "text-emerald-600" : o.status === "aprovado" ? "text-sky-600" : "text-amber-600"
+                      }`}>
                         {o.status}
                       </div>
                     </div>

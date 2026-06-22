@@ -67,7 +67,7 @@ export type Orcamento = {
   vendedor_nome: string;
   total: number;
   desconto: number;
-  status: "pendente" | "realizado";
+  status: "pendente" | "aprovado" | "realizado";
   data: string;
   plano: string | null;
   plano_id: string | null;

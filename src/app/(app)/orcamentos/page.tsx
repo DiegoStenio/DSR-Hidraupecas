@@ -2,23 +2,54 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, FileText, Send, Download, Pencil, Trash2, Search } from "lucide-react";
+import { Plus, FileText, Send, Download, Pencil, Trash2, Search, ChevronDown } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { createClient } from "@/lib/supabase/client";
 import type { Orcamento } from "@/lib/supabase/types";
 import { toast } from "sonner";
 
 const fmt = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+const STATUS_OPCOES = ["pendente", "aprovado", "realizado"] as const;
+
+const STATUS_CLS: Record<Orcamento["status"], string> = {
+  pendente: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+  aprovado: "bg-sky-500/10 text-sky-600 border-sky-500/20",
+  realizado: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+};
+
+function StatusMenu({ status, onChange }: { status: Orcamento["status"]; onChange: (s: Orcamento["status"]) => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-2 py-1 rounded-md font-medium border transition-opacity hover:opacity-80 ${STATUS_CLS[status]}`}>
+          {status}
+          <ChevronDown className="h-3 w-3" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-36">
+        {STATUS_OPCOES.map((s) => (
+          <DropdownMenuItem key={s} disabled={s === status} onClick={() => onChange(s)} className="capitalize">
+            {s}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export default function OrcamentosPage() {
   const supabase = createClient();
   const [list, setList] = useState<Orcamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
-  const [filter, setFilter] = useState<"todos" | "pendente" | "realizado">("todos");
+  const [filter, setFilter] = useState<"todos" | Orcamento["status"]>("todos");
 
   useEffect(() => {
     supabase
@@ -45,6 +76,13 @@ export default function OrcamentosPage() {
     if (error) { toast.error("Erro ao excluir", { description: error.message }); return; }
     setList(l => l.filter(x => x.id !== id));
     toast.success("Excluído");
+  };
+
+  const handleStatusChange = async (id: string, status: Orcamento["status"]) => {
+    const { error } = await supabase.from("orcamentos").update({ status }).eq("id", id);
+    if (error) { toast.error("Erro ao atualizar status", { description: error.message }); return; }
+    setList(l => l.map(o => o.id === id ? { ...o, status } : o));
+    toast.success(`Status atualizado para "${status}"`);
   };
 
   const handleSendWhatsapp = async (o: Orcamento) => {
@@ -76,7 +114,7 @@ export default function OrcamentosPage() {
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por cliente ou número…" className="pl-10 h-11" />
         </div>
         <div className="flex gap-1 p-1 rounded-xl bg-muted">
-          {(["todos", "pendente", "realizado"] as const).map(s => (
+          {(["todos", ...STATUS_OPCOES] as const).map(s => (
             <button
               key={s}
               onClick={() => setFilter(s)}
@@ -122,11 +160,7 @@ export default function OrcamentosPage() {
                     <td className="px-5 py-4 text-muted-foreground">{o.data}</td>
                     <td className="px-5 py-4 text-right font-display font-semibold tabular-nums">{fmt(o.total)}</td>
                     <td className="px-5 py-4 text-center">
-                      <span className={`inline-flex text-[10px] uppercase tracking-wider px-2 py-1 rounded-md font-medium border ${
-                        o.status === "realizado"
-                          ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                          : "bg-amber-500/10 text-amber-600 border-amber-500/20"
-                      }`}>{o.status}</span>
+                      <StatusMenu status={o.status} onChange={(s) => handleStatusChange(o.id, s)} />
                     </td>
                     <td className="px-5 py-4 text-right">
                       <Button size="icon" variant="ghost" asChild>
@@ -157,9 +191,7 @@ export default function OrcamentosPage() {
                     <div className="font-medium text-foreground truncate">{o.cliente_nome}</div>
                     <div className="text-xs text-muted-foreground mt-0.5">{o.vendedor_nome} · {o.data}</div>
                   </div>
-                  <span className={`inline-flex text-[10px] uppercase tracking-wider px-2 py-1 rounded-md font-medium border ${
-                    o.status === "realizado" ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : "bg-amber-500/10 text-amber-600 border-amber-500/20"
-                  }`}>{o.status}</span>
+                  <StatusMenu status={o.status} onChange={(s) => handleStatusChange(o.id, s)} />
                 </div>
                 <div className="mt-3 flex items-center justify-between">
                   <div className="font-display text-xl font-semibold">{fmt(o.total)}</div>
