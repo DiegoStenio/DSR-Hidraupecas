@@ -50,10 +50,11 @@ function NovoOrcamentoForm() {
   const [budgetType, setBudgetType] = useState<BudgetType>("items");
   const [items, setItems] = useState<ItemRow[]>([]);
   const [newDesc, setNewDesc] = useState("");
-  const [newQtd, setNewQtd] = useState(1);
+  const [newQtdInput, setNewQtdInput] = useState("1");
   const [newValorInput, setNewValorInput] = useState("");
 
-  const [groupQuantity, setGroupQuantity] = useState(1);
+  const [groupQuantityInput, setGroupQuantityInput] = useState("1");
+  const groupQuantity = parseInt(groupQuantityInput, 10) || 0;
   const [groupUnitPrice, setGroupUnitPrice] = useState(0);
   const [groupUnitPriceInput, setGroupUnitPriceInput] = useState("");
 
@@ -85,7 +86,7 @@ function NovoOrcamentoForm() {
         setVendedorId(orc.vendedor_id ?? "");
         setBudgetType(orc.budget_type);
         setItems((orc.itens ?? []).map((it: ItemOrcamento) => ({ ...it, id: crypto.randomUUID() })));
-        setGroupQuantity(orc.group_quantity ?? 1);
+        setGroupQuantityInput(String(orc.group_quantity ?? 1));
         setGroupUnitPrice(orc.group_unit_price ?? 0);
         setGroupUnitPriceInput(orc.group_unit_price ? formatBRL(orc.group_unit_price) : "");
         setDesconto(orc.desconto);
@@ -125,13 +126,14 @@ function NovoOrcamentoForm() {
     if (!newDesc.trim()) { toast.error("Forneça uma descrição para o serviço."); return; }
     if (budgetType === "items") {
       const valorUnit = parseBRL(newValorInput);
+      const newQtd = parseInt(newQtdInput, 10) || 0;
       if (valorUnit <= 0) { toast.error("Forneça um valor unitário positivo."); return; }
       if (newQtd <= 0) { toast.error("Forneça uma quantidade positiva."); return; }
       setItems([...items, { id: crypto.randomUUID(), descricao: newDesc.trim(), qtd: newQtd, valor: newQtd * valorUnit }]);
     } else {
       setItems([...items, { id: crypto.randomUUID(), descricao: newDesc.trim(), qtd: 1, valor: 0 }]);
     }
-    setNewDesc(""); setNewValorInput(""); setNewQtd(1);
+    setNewDesc(""); setNewValorInput(""); setNewQtdInput("1");
   };
 
   const handleSave = async (after?: "pdf" | "whatsapp") => {
@@ -265,7 +267,7 @@ function NovoOrcamentoForm() {
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="item-qtd">Qtd.</Label>
-                  <Input id="item-qtd" type="number" min={1} value={newQtd} onChange={(e) => setNewQtd(Math.max(1, parseInt(e.target.value, 10) || 1))} />
+                  <Input id="item-qtd" inputMode="numeric" value={newQtdInput} onChange={(e) => setNewQtdInput(e.target.value.replace(/[^0-9]/g, ""))} />
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="item-valor">Vlr. Unit. (R$)</Label>
@@ -324,7 +326,7 @@ function NovoOrcamentoForm() {
               <>
                 <div className="flex justify-between items-center text-sm font-medium text-muted-foreground">
                   <Label htmlFor="group-qtd" className="flex items-center gap-2 cursor-pointer"><PlusCircle className="h-4 w-4" />Quantidade de Serviço</Label>
-                  <Input id="group-qtd" type="number" min={1} value={groupQuantity} onChange={(e) => setGroupQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))} className="max-w-[150px] text-right" />
+                  <Input id="group-qtd" inputMode="numeric" value={groupQuantityInput} onChange={(e) => setGroupQuantityInput(e.target.value.replace(/[^0-9]/g, ""))} className="max-w-[150px] text-right" />
                 </div>
                 <div className="flex justify-between items-center text-sm font-medium text-muted-foreground">
                   <Label htmlFor="group-valor" className="flex items-center gap-2 cursor-pointer"><DollarSign className="h-4 w-4" />Valor Total Unitário (R$)</Label>
