@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import type { Cliente, CompanySettings, Orcamento, PlanoPagamento, Vendedor } from "@/lib/supabase/types";
 import { OrcamentoPrintable, fmtMoeda } from "@/components/app/orcamento-printable";
-import { abrirWhatsapp, gerarOrcamentoPdfBlob, uploadOrcamentoPdf } from "@/lib/orcamento-pdf";
+import { gerarOrcamentoPdfBlob, uploadOrcamentoPdf, urlWhatsapp } from "@/lib/orcamento-pdf";
 import { toast } from "sonner";
 
 type Props = {
@@ -50,7 +50,7 @@ export function OrcamentoSendDialog({ orcamentoId, open, onOpenChange }: Props) 
     })();
   }, [open, orcamentoId, supabase]);
 
-  const handleEnviar = async (destino: "cliente" | "vendedor") => {
+  const handleEnviar = (destino: "cliente" | "vendedor") => {
     if (!orcamento) return;
     const telefone = destino === "cliente" ? cliente?.telefone : vendedor?.whatsapp;
     if (!telefone) {
@@ -59,20 +59,30 @@ export function OrcamentoSendDialog({ orcamentoId, open, onOpenChange }: Props) 
     }
     if (!printRef.current) return;
 
+    // Precisa abrir a janela aqui, de forma síncrona dentro do clique, senão
+    // navegadores mobile (Safari/Chrome iOS) bloqueiam o popup já que o PDF
+    // é gerado de forma assíncrona (await) antes do window.open.
+    const janela = window.open("", "_blank");
+
     setSendingPara(destino);
-    try {
-      const blob = await gerarOrcamentoPdfBlob(printRef.current);
-      const url = await uploadOrcamentoPdf(supabase, orcamento.numero, blob);
-      const mensagem = destino === "cliente"
-        ? `Olá ${orcamento.cliente_nome}, aqui está seu orçamento #${orcamento.numero} com total de ${fmtMoeda(orcamento.total)}. Baixe o PDF: ${url}`
-        : `Orçamento #${orcamento.numero} (${orcamento.cliente_nome}) — total de ${fmtMoeda(orcamento.total)}. PDF: ${url}`;
-      abrirWhatsapp(telefone, mensagem);
-      onOpenChange(false);
-    } catch (err) {
-      toast.error("Erro ao gerar/enviar PDF", { description: err instanceof Error ? err.message : undefined });
-    } finally {
-      setSendingPara(null);
-    }
+    (async () => {
+      try {
+        const blob = await gerarOrcamentoPdfBlob(printRef.current!);
+        const url = await uploadOrcamentoPdf(supabase, orcamento.numero, blob);
+        const mensagem = destino === "cliente"
+          ? `Olá ${orcamento.cliente_nome}, aqui está seu orçamento #${orcamento.numero} com total de ${fmtMoeda(orcamento.total)}. Baixe o PDF: ${url}`
+          : `Orçamento #${orcamento.numero} (${orcamento.cliente_nome}) — total de ${fmtMoeda(orcamento.total)}. PDF: ${url}`;
+        const waUrl = urlWhatsapp(telefone, mensagem);
+        if (janela) janela.location.href = waUrl;
+        else window.open(waUrl, "_blank");
+        onOpenChange(false);
+      } catch (err) {
+        janela?.close();
+        toast.error("Erro ao gerar/enviar PDF", { description: err instanceof Error ? err.message : undefined });
+      } finally {
+        setSendingPara(null);
+      }
+    })();
   };
 
   return (

@@ -149,6 +149,11 @@ function NovoOrcamentoForm() {
       return;
     }
 
+    // Precisa abrir a janela aqui, de forma síncrona dentro do clique, senão
+    // navegadores mobile (Safari/Chrome iOS) bloqueiam o popup já que o
+    // orçamento é salvo de forma assíncrona (await) antes do window.open.
+    const janelaWhatsapp = after === "whatsapp" ? window.open("", "_blank") : null;
+
     setSaving(true);
     const payload = {
       cliente_id: cliente.id, cliente_nome: cliente.nome,
@@ -173,14 +178,17 @@ function NovoOrcamentoForm() {
         }).select().single();
     setSaving(false);
 
-    if (error) { toast.error("Erro ao salvar orçamento", { description: error.message }); return; }
+    if (error) { toast.error("Erro ao salvar orçamento", { description: error.message }); janelaWhatsapp?.close(); return; }
 
     if (after === "whatsapp") {
       if (vendedor.whatsapp) {
         const message = encodeURIComponent(`Olá ${cliente.nome}, aqui está seu orçamento #${data.numero} com um total de ${fmt(total)}. Por favor me avise se tiver alguma dúvida.`);
-        window.open(`https://wa.me/${vendedor.whatsapp.replace(/\D/g, "")}?text=${message}`, "_blank");
+        const waUrl = `https://wa.me/${vendedor.whatsapp.replace(/\D/g, "")}?text=${message}`;
+        if (janelaWhatsapp) janelaWhatsapp.location.href = waUrl;
+        else window.open(waUrl, "_blank");
       } else {
         toast.error("Número do WhatsApp não encontrado", { description: "O vendedor selecionado não possui WhatsApp cadastrado." });
+        janelaWhatsapp?.close();
       }
     }
 

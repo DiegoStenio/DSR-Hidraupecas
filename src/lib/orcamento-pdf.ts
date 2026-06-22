@@ -27,7 +27,11 @@ export async function uploadOrcamentoPdf(
   return data.publicUrl;
 }
 
-export function abrirWhatsapp(telefone: string, mensagem: string) {
+export function urlWhatsapp(telefone: string, mensagem: string) {
   const numero = telefone.replace(/\D/g, "");
-  window.open(`https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`, "_blank");
+  return `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
+}
+
+export function abrirWhatsapp(telefone: string, mensagem: string) {
+  window.open(urlWhatsapp(telefone, mensagem), "_blank");
 }
