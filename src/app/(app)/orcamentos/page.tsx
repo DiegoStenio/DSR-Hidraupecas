@@ -10,6 +10,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { createClient } from "@/lib/supabase/client";
 import type { Orcamento } from "@/lib/supabase/types";
 import { toast } from "sonner";
@@ -50,6 +54,7 @@ export default function OrcamentosPage() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"todos" | Orcamento["status"]>("todos");
+  const [deleting, setDeleting] = useState<Orcamento | null>(null);
 
   useEffect(() => {
     supabase
@@ -71,11 +76,13 @@ export default function OrcamentosPage() {
     });
   }, [list, q, filter]);
 
-  const handleDelete = async (id: string) => {
-    const { error } = await supabase.from("orcamentos").delete().eq("id", id);
-    if (error) { toast.error("Erro ao excluir", { description: error.message }); return; }
-    setList(l => l.filter(x => x.id !== id));
-    toast.success("Excluído");
+  const handleDelete = async () => {
+    if (!deleting) return;
+    const { error } = await supabase.from("orcamentos").delete().eq("id", deleting.id);
+    if (error) { toast.error("Erro ao excluir", { description: error.message }); setDeleting(null); return; }
+    setList(l => l.filter(x => x.id !== deleting.id));
+    toast.success("Orçamento excluído");
+    setDeleting(null);
   };
 
   const handleStatusChange = async (id: string, status: Orcamento["status"]) => {
@@ -172,7 +179,7 @@ export default function OrcamentosPage() {
                       <Button size="icon" variant="ghost" onClick={() => handleSendWhatsapp(o)} className="text-emerald-600">
                         <Send className="h-4 w-4" />
                       </Button>
-                      <Button size="icon" variant="ghost" onClick={() => handleDelete(o.id)} className="text-destructive">
+                      <Button size="icon" variant="ghost" onClick={() => setDeleting(o)} className="text-destructive">
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </td>
@@ -203,6 +210,7 @@ export default function OrcamentosPage() {
                       <Link href={`/orcamentos/${o.id}/imprimir`}><Download className="h-4 w-4" /></Link>
                     </Button>
                     <Button size="icon" variant="ghost" onClick={() => handleSendWhatsapp(o)} className="text-emerald-600"><Send className="h-4 w-4" /></Button>
+                    <Button size="icon" variant="ghost" onClick={() => setDeleting(o)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 </div>
               </div>
@@ -210,6 +218,23 @@ export default function OrcamentosPage() {
           </div>
         </>
       )}
+
+      <AlertDialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir orçamento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O orçamento {deleting?.numero} de {deleting?.cliente_nome} será removido permanentemente. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={handleDelete}>
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
