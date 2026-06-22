@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import type { Cliente, CompanySettings, Orcamento, PlanoPagamento, Vendedor } from "@/lib/supabase/types";
-import { OrcamentoPrintable, fmtMoeda } from "@/components/app/orcamento-printable";
+import { OrcamentoPrintable } from "@/components/app/orcamento-printable";
 import { gerarOrcamentoPdfBlob, uploadOrcamentoPdf, urlWhatsapp } from "@/lib/orcamento-pdf";
 import { toast } from "sonner";
 
@@ -70,8 +70,8 @@ export function OrcamentoSendDialog({ orcamentoId, open, onOpenChange }: Props) 
         const blob = await gerarOrcamentoPdfBlob(printRef.current!);
         const url = await uploadOrcamentoPdf(supabase, orcamento.numero, blob);
         const mensagem = destino === "cliente"
-          ? `Olá ${orcamento.cliente_nome}, aqui está seu orçamento #${orcamento.numero} com total de ${fmtMoeda(orcamento.total)}. Baixe o PDF: ${url}`
-          : `Orçamento #${orcamento.numero} (${orcamento.cliente_nome}) — total de ${fmtMoeda(orcamento.total)}. PDF: ${url}`;
+          ? `Olá ${orcamento.cliente_nome}, aqui está seu orçamento #${orcamento.numero}. Baixe o PDF: ${url}`
+          : `Orçamento #${orcamento.numero} (${orcamento.cliente_nome}). PDF: ${url}`;
         const waUrl = urlWhatsapp(telefone, mensagem);
         if (janela) janela.location.href = waUrl;
         else window.open(waUrl, "_blank");

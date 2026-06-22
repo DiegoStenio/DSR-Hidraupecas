@@ -182,7 +182,7 @@ function NovoOrcamentoForm() {
 
     if (after === "whatsapp") {
       if (vendedor.whatsapp) {
-        const message = encodeURIComponent(`Olá ${cliente.nome}, aqui está seu orçamento #${data.numero} com um total de ${fmt(total)}. Por favor me avise se tiver alguma dúvida.`);
+        const message = encodeURIComponent(`Olá ${cliente.nome}, aqui está seu orçamento #${data.numero}. Por favor me avise se tiver alguma dúvida.`);
         const waUrl = `https://wa.me/${vendedor.whatsapp.replace(/\D/g, "")}?text=${message}`;
         if (janelaWhatsapp) janelaWhatsapp.location.href = waUrl;
         else window.open(waUrl, "_blank");
