@@ -21,11 +21,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { createClient } from "@/lib/supabase/client";
+import { useCurrentUser } from "@/hooks/use-current-user";
 
 export function Header({ onOpenMobile }: { onOpenMobile: () => void }) {
   const { theme, toggle } = useTheme();
   const [cmdOpen, setCmdOpen] = useState(false);
   const router = useRouter();
+  const { user } = useCurrentUser();
+  const fullName = ((user?.user_metadata?.full_name ?? user?.user_metadata?.name) as string | undefined)?.trim();
+  const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
+  const displayName = fullName || user?.email?.split("@")[0] || "Usuário";
+  const initials = displayName.slice(0, 2).toUpperCase();
 
   const signOut = async () => {
     const supabase = createClient();
@@ -90,12 +96,16 @@ export function Header({ onOpenMobile }: { onOpenMobile: () => void }) {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2 rounded-xl border border-border bg-card px-2 py-1.5 hover:border-[var(--gold)]/40 transition-colors">
-              <div className="grid h-7 w-7 place-items-center rounded-lg bg-primary text-primary-foreground text-xs font-semibold">
-                AS
-              </div>
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={displayName} className="h-7 w-7 rounded-lg object-cover" />
+              ) : (
+                <div className="grid h-7 w-7 place-items-center rounded-lg bg-primary text-primary-foreground text-xs font-semibold">
+                  {initials}
+                </div>
+              )}
               <div className="hidden sm:block text-left leading-tight pr-1">
-                <div className="text-xs font-semibold text-foreground">Ana Silva</div>
-                <div className="text-[10px] text-muted-foreground">Administração</div>
+                <div className="text-xs font-semibold text-foreground capitalize">{displayName}</div>
+                <div className="text-[10px] text-muted-foreground">{user?.email}</div>
               </div>
             </button>
           </DropdownMenuTrigger>

@@ -24,6 +24,17 @@ function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 }
 
+function formatRelativo(iso: string) {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diffMs / 60000);
+  if (min < 1) return "agora";
+  if (min < 60) return `há ${min}min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${h}h`;
+  const d = Math.floor(h / 24);
+  return `há ${d}d`;
+}
+
 function KpiCard({
   label, value, icon: Icon, hint, money,
 }: {
@@ -66,6 +77,9 @@ export default function Dashboard() {
   const [etapas, setEtapas] = useState<LeadEtapa[]>([]);
   const [leadEtapaCounts, setLeadEtapaCounts] = useState<Record<string, number>>({});
   const [leadsArquivadosCount, setLeadsArquivadosCount] = useState(0);
+  const [resumoIa, setResumoIa] = useState<string | null>(null);
+  const [resumoAtualizadoEm, setResumoAtualizadoEm] = useState<string | null>(null);
+  const [gerandoResumo, setGerandoResumo] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -73,7 +87,8 @@ export default function Dashboard() {
       supabase.from("clientes").select("*", { count: "exact", head: true }),
       supabase.from("lead_etapas").select("*").order("ordem", { ascending: true }),
       supabase.from("leads").select("etapa_id, arquivado"),
-    ]).then(([orc, cli, et, leads]) => {
+      supabase.from("company_settings").select("resumo_ia, resumo_ia_atualizado_em").limit(1).maybeSingle(),
+    ]).then(([orc, cli, et, leads, settings]) => {
       if (orc.error) toast.error("Erro ao carregar orçamentos", { description: orc.error.message });
       if (leads.error) toast.error("Erro ao carregar leads", { description: leads.error.message });
       setOrcamentos(orc.data ?? []);
@@ -87,9 +102,29 @@ export default function Dashboard() {
       });
       setLeadEtapaCounts(counts);
       setLeadsArquivadosCount(arquivados);
+      setResumoIa(settings.data?.resumo_ia ?? null);
+      setResumoAtualizadoEm(settings.data?.resumo_ia_atualizado_em ?? null);
       setLoading(false);
     });
   }, [supabase]);
+
+  const gerarResumo = async () => {
+    setGerandoResumo(true);
+    try {
+      const res = await fetch("/api/dashboard/resumo", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error("Erro ao gerar resumo", { description: json.error });
+        return;
+      }
+      setResumoIa(json.resumo);
+      setResumoAtualizadoEm(json.atualizadoEm);
+    } catch (err) {
+      toast.error("Erro ao gerar resumo", { description: err instanceof Error ? err.message : "Tente novamente." });
+    } finally {
+      setGerandoResumo(false);
+    }
+  };
 
   const {
     orcamentosTotais, orcamentosPendentes, orcamentosRealizadosQtd, orcamentosRealizadosValor,
@@ -199,16 +234,27 @@ export default function Dashboard() {
               </div>
               <div>
                 <h2 className="text-base font-semibold text-foreground">Resumo inteligente</h2>
-                <p className="text-[11px] text-muted-foreground">Ainda não gerado</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {resumoAtualizadoEm ? `Atualizado ${formatRelativo(resumoAtualizadoEm)}` : "Ainda não gerado"}
+                </p>
               </div>
             </div>
-            <button className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" disabled>
-              <RefreshCw className="h-4 w-4" strokeWidth={1.5} />
+            <button
+              onClick={gerarResumo}
+              disabled={gerandoResumo}
+              className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
+              aria-label="Gerar resumo"
+            >
+              <RefreshCw className={`h-4 w-4 ${gerandoResumo ? "animate-spin" : ""}`} strokeWidth={1.5} />
             </button>
           </div>
-          <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-            O resumo gerado por IA chega na próxima fase, junto com a análise de leads e clientes.
-          </p>
+          {resumoIa ? (
+            <p className="mt-4 text-sm leading-relaxed text-foreground/90">{resumoIa}</p>
+          ) : (
+            <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+              {gerandoResumo ? "Gerando resumo com IA…" : "Clique no ícone de atualizar para a IA analisar seus dados e gerar um resumo executivo."}
+            </p>
+          )}
         </div>
       </div>
 

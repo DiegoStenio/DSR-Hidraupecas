@@ -145,6 +145,8 @@ export type CompanySettings = {
   pix_qrcode_url: string | null;
   pix_chave: string | null;
   contexto_negocio: string | null;
+  resumo_ia: string | null;
+  resumo_ia_atualizado_em: string | null;
   ai_provider: "gemini" | "claude";
   updated_at: string;
 };

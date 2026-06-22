@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/client";
 import type { CompanySettings } from "@/lib/supabase/types";
+import { useCurrentUser } from "@/hooks/use-current-user";
 import { toast } from "sonner";
 
 export default function ConfigPage() {
@@ -83,16 +84,7 @@ export default function ConfigPage() {
         </TabsContent>
 
         <TabsContent value="usuario" className="mt-5">
-          <SectionCard title="Meu perfil">
-            <div className="flex items-center gap-4 mb-5">
-              <div className="grid h-16 w-16 place-items-center rounded-2xl bg-primary text-primary-foreground font-display text-xl font-semibold">AS</div>
-              <Button variant="outline" className="gap-2"><Upload className="h-4 w-4" />Alterar foto</Button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field label="Nome" defaultValue="Diego" />
-              <Field label="E-mail" defaultValue="dsr.diego09@gmail.com" />
-            </div>
-          </SectionCard>
+          <PerfilForm />
         </TabsContent>
 
         <TabsContent value="integracoes" className="mt-5 space-y-5">
@@ -187,12 +179,85 @@ function SectionCard({ title, subtitle, children }: { title: React.ReactNode; su
   );
 }
 
-function Field({ label, defaultValue }: { label: string; defaultValue?: string }) {
+function PerfilForm() {
+  const { user, loading, refresh } = useCurrentUser();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [nome, setNome] = useState("");
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    if (user) setNome(((user.user_metadata?.full_name ?? user.user_metadata?.name) as string | undefined) ?? "");
+  }, [user]);
+
+  const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
+  const displayName = nome || user?.email?.split("@")[0] || "Usuário";
+  const initials = displayName.slice(0, 2).toUpperCase();
+
+  const salvarNome = async () => {
+    const supabase = createClient();
+    const { error } = await supabase.auth.updateUser({ data: { full_name: nome } });
+    if (error) { toast.error("Erro ao salvar nome", { description: error.message }); return; }
+    toast.success("Perfil atualizado");
+    refresh();
+  };
+
+  const handleFile = async (file: File) => {
+    if (!user) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Arquivo muito grande", { description: "O limite é 2MB." });
+      return;
+    }
+    setUploading(true);
+    const supabase = createClient();
+    const ext = file.name.split(".").pop() ?? "png";
+    const path = `avatars/${user.id}.${ext}`;
+    const { error: upError } = await supabase.storage.from("company-assets").upload(path, file, { upsert: true });
+    if (upError) { setUploading(false); toast.error("Erro ao enviar imagem", { description: upError.message }); return; }
+    const { data } = supabase.storage.from("company-assets").getPublicUrl(path);
+    const { error: updError } = await supabase.auth.updateUser({ data: { avatar_url: `${data.publicUrl}?v=${Date.now()}` } });
+    setUploading(false);
+    if (updError) { toast.error("Erro ao salvar foto", { description: updError.message }); return; }
+    toast.success("Foto atualizada");
+    refresh();
+  };
+
+  if (loading || !user) {
+    return <Skeleton className="h-64 rounded-2xl" />;
+  }
+
   return (
-    <div className="grid gap-1.5">
-      <Label>{label}</Label>
-      <Input defaultValue={defaultValue} />
-    </div>
+    <SectionCard title="Meu perfil">
+      <div className="flex items-center gap-4 mb-5">
+        {avatarUrl ? (
+          <img src={avatarUrl} alt={displayName} className="h-16 w-16 rounded-2xl object-cover" />
+        ) : (
+          <div className="grid h-16 w-16 place-items-center rounded-2xl bg-primary text-primary-foreground font-display text-xl font-semibold">
+            {initials}
+          </div>
+        )}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+        />
+        <Button variant="outline" className="gap-2" disabled={uploading} onClick={() => inputRef.current?.click()}>
+          <Upload className="h-4 w-4" />{uploading ? "Enviando…" : "Alterar foto"}
+        </Button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid gap-1.5">
+          <Label>Nome</Label>
+          <Input value={nome} onChange={(e) => setNome(e.target.value)} onBlur={salvarNome} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label>E-mail</Label>
+          <Input value={user.email ?? ""} disabled />
+        </div>
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">O e-mail é o usado para login e não pode ser alterado aqui.</p>
+    </SectionCard>
   );
 }
 
