@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -16,7 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/client";
-import type { Prestador } from "@/lib/supabase/types";
+import type { Prestador, Vendedor } from "@/lib/supabase/types";
 import { toast } from "sonner";
 
 type PrestadorForm = {
@@ -36,44 +37,53 @@ type PrestadorForm = {
   cidade: string;
   estado: string;
   observacoes: string;
+  vendedor_id: string;
 };
 
 const emptyForm: PrestadorForm = {
   tipo: "PJ", nome: "", nome_fantasia: "", documento: "", ie_rg: "", especialidade: "",
   telefone: "", email: "", cep: "", logradouro: "", numero: "", bairro: "", cidade: "", estado: "", observacoes: "",
+  vendedor_id: "",
 };
 
 export default function PrestadoresPage() {
   const supabase = createClient();
   const [list, setList] = useState<Prestador[]>([]);
+  const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+  const [filtroVendedorId, setFiltroVendedorId] = useState("todos");
   const [editing, setEditing] = useState<Prestador | null>(null);
   const [creating, setCreating] = useState(false);
   const [viewing, setViewing] = useState<Prestador | null>(null);
   const [deleting, setDeleting] = useState<Prestador | null>(null);
 
   useEffect(() => {
-    supabase
-      .from("prestadores")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .then(({ data, error }) => {
-        if (error) toast.error("Erro ao carregar prestadores", { description: error.message });
-        else setList(data ?? []);
-        setLoading(false);
-      });
+    Promise.all([
+      supabase.from("prestadores").select("*").order("created_at", { ascending: false }),
+      supabase.from("vendedores").select("*").order("nome"),
+    ]).then(([p, v]) => {
+      if (p.error) toast.error("Erro ao carregar prestadores", { description: p.error.message });
+      else setList(p.data ?? []);
+      setVendedores(v.data ?? []);
+      setLoading(false);
+    });
   }, [supabase]);
+
+  const vendedorNome = (id: string | null) => vendedores.find((v) => v.id === id)?.nome ?? null;
 
   const filtered = useMemo(() => {
     const s = q.toLowerCase();
     return list.filter((p) =>
-      p.nome.toLowerCase().includes(s) ||
-      p.documento.toLowerCase().includes(s) ||
-      (p.telefone ?? "").includes(s) ||
-      (p.especialidade ?? "").toLowerCase().includes(s)
+      (filtroVendedorId === "todos" || p.vendedor_id === filtroVendedorId) &&
+      (
+        p.nome.toLowerCase().includes(s) ||
+        p.documento.toLowerCase().includes(s) ||
+        (p.telefone ?? "").includes(s) ||
+        (p.especialidade ?? "").toLowerCase().includes(s)
+      )
     );
-  }, [list, q]);
+  }, [list, q, filtroVendedorId]);
 
   const handleSave = async (form: PrestadorForm) => {
     const payload = {
@@ -82,6 +92,7 @@ export default function PrestadoresPage() {
       telefone: form.telefone || null, email: form.email || null, cep: form.cep || null,
       logradouro: form.logradouro || null, numero: form.numero || null, bairro: form.bairro || null,
       cidade: form.cidade || null, estado: form.estado || null, observacoes: form.observacoes || null,
+      vendedor_id: form.vendedor_id || null,
     };
     if (form.id) {
       const { data, error } = await supabase.from("prestadores").update(payload).eq("id", form.id).select().single();
@@ -118,13 +129,22 @@ export default function PrestadoresPage() {
         }
       />
 
-      <div className="relative">
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
-        <Input
-          value={q} onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar prestadores…"
-          className="pl-10 bg-card border-border h-11"
-        />
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
+          <Input
+            value={q} onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar prestadores…"
+            className="pl-10 bg-card border-border h-11"
+          />
+        </div>
+        <Select value={filtroVendedorId} onValueChange={setFiltroVendedorId}>
+          <SelectTrigger className="sm:w-[220px] h-11 bg-card"><SelectValue placeholder="Todos os vendedores" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os vendedores</SelectItem>
+            {vendedores.map((v) => <SelectItem key={v.id} value={v.id}>{v.nome}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
 
       {loading ? (
@@ -132,7 +152,7 @@ export default function PrestadoresPage() {
           {[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 rounded-2xl" />)}
         </div>
       ) : filtered.length === 0 ? (
-        <EmptyState onAdd={() => setCreating(true)} />
+        <EmptyState onAdd={() => setCreating(true)} filtrado={filtroVendedorId !== "todos" || q !== ""} />
       ) : (
         <>
           <div className="hidden md:block rounded-2xl border border-border bg-card overflow-hidden">
@@ -141,6 +161,7 @@ export default function PrestadoresPage() {
                 <tr>
                   <th className="text-left px-5 py-3 font-medium">Prestador</th>
                   <th className="text-left px-5 py-3 font-medium">Especialidade</th>
+                  <th className="text-left px-5 py-3 font-medium">Vendedor</th>
                   <th className="text-left px-5 py-3 font-medium">Telefone</th>
                   <th className="text-left px-5 py-3 font-medium">Cidade</th>
                   <th className="text-right px-5 py-3 font-medium">Ações</th>
@@ -161,6 +182,7 @@ export default function PrestadoresPage() {
                       </div>
                     </td>
                     <td className="px-5 py-4 text-foreground">{p.especialidade || "—"}</td>
+                    <td className="px-5 py-4 text-muted-foreground">{vendedorNome(p.vendedor_id) ?? "—"}</td>
                     <td className="px-5 py-4 text-foreground">{p.telefone}</td>
                     <td className="px-5 py-4 text-muted-foreground">{[p.cidade, p.estado].filter(Boolean).join("/") || "—"}</td>
                     <td className="px-5 py-4 text-right" onClick={(e) => e.stopPropagation()}>
@@ -193,6 +215,9 @@ export default function PrestadoresPage() {
                   <div><span className="text-foreground">{p.telefone}</span></div>
                   <div className="text-right">{[p.cidade, p.estado].filter(Boolean).join("/") || "—"}</div>
                 </div>
+                {vendedorNome(p.vendedor_id) && (
+                  <div className="mt-1.5 text-xs text-muted-foreground">Vendedor: <span className="text-foreground">{vendedorNome(p.vendedor_id)}</span></div>
+                )}
               </button>
             ))}
           </div>
@@ -202,11 +227,12 @@ export default function PrestadoresPage() {
       <PrestadorFormDialog
         open={creating || editing !== null}
         prestador={editing}
+        vendedores={vendedores}
         onClose={() => { setCreating(false); setEditing(null); }}
         onSave={handleSave}
       />
 
-      <PrestadorViewDialog prestador={viewing} onClose={() => setViewing(null)} />
+      <PrestadorViewDialog prestador={viewing} vendedorNome={viewing ? vendedorNome(viewing.vendedor_id) : null} onClose={() => setViewing(null)} />
 
       <AlertDialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>
         <AlertDialogContent>
@@ -228,22 +254,26 @@ export default function PrestadoresPage() {
   );
 }
 
-function EmptyState({ onAdd }: { onAdd: () => void }) {
+function EmptyState({ onAdd, filtrado }: { onAdd: () => void; filtrado?: boolean }) {
   return (
     <div className="rounded-2xl border border-dashed border-border bg-card p-12 text-center">
       <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-muted">
         <Wrench className="h-5 w-5 text-muted-foreground" strokeWidth={1.5} />
       </div>
       <h3 className="mt-3 font-semibold text-foreground">Nenhum prestador por aqui</h3>
-      <p className="mt-1 text-sm text-muted-foreground">Cadastre os parceiros que arrumam as peças dos seus clientes.</p>
-      <Button onClick={onAdd} className="mt-4 gap-2"><Plus className="h-4 w-4" />Adicionar prestador</Button>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {filtrado ? "Nenhum resultado para os filtros aplicados." : "Cadastre os parceiros que arrumam as peças dos seus clientes."}
+      </p>
+      {!filtrado && (
+        <Button onClick={onAdd} className="mt-4 gap-2"><Plus className="h-4 w-4" />Adicionar prestador</Button>
+      )}
     </div>
   );
 }
 
 function PrestadorFormDialog({
-  open, prestador, onClose, onSave,
-}: { open: boolean; prestador: Prestador | null; onClose: () => void; onSave: (p: PrestadorForm) => void }) {
+  open, prestador, vendedores, onClose, onSave,
+}: { open: boolean; prestador: Prestador | null; vendedores: Vendedor[]; onClose: () => void; onSave: (p: PrestadorForm) => void }) {
   const [form, setForm] = useState<PrestadorForm>(emptyForm);
 
   useEffect(() => {
@@ -255,6 +285,7 @@ function PrestadorFormDialog({
         cep: prestador.cep ?? "", logradouro: prestador.logradouro ?? "", numero: prestador.numero ?? "",
         bairro: prestador.bairro ?? "", cidade: prestador.cidade ?? "",
         estado: prestador.estado ?? "", observacoes: prestador.observacoes ?? "",
+        vendedor_id: prestador.vendedor_id ?? "",
       });
     } else if (open) {
       setForm(emptyForm);
@@ -321,6 +352,17 @@ function PrestadorFormDialog({
               <Label>E-mail</Label>
               <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </div>
+            <div className="grid gap-1.5 md:col-span-2">
+              <Label>Vendedor vinculado</Label>
+              <Select value={form.vendedor_id || "nenhum"} onValueChange={(v) => setForm({ ...form, vendedor_id: v === "nenhum" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nenhum">Nenhum</SelectItem>
+                  {vendedores.map((v) => <SelectItem key={v.id} value={v.id}>{v.nome}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Esse prestador só aparece pra esse vendedor quando ele filtrar pelo nome.</p>
+            </div>
           </div>
 
           <div className="space-y-4">
@@ -372,7 +414,9 @@ function PrestadorFormDialog({
   );
 }
 
-function PrestadorViewDialog({ prestador, onClose }: { prestador: Prestador | null; onClose: () => void }) {
+function PrestadorViewDialog({
+  prestador, vendedorNome, onClose,
+}: { prestador: Prestador | null; vendedorNome: string | null; onClose: () => void }) {
   if (!prestador) return null;
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -387,6 +431,7 @@ function PrestadorViewDialog({ prestador, onClose }: { prestador: Prestador | nu
         <div className="mt-2 space-y-3 text-sm">
           {prestador.nome_fantasia && <Row k="Nome fantasia" v={prestador.nome_fantasia} />}
           {prestador.especialidade && <Row k="Especialidade" v={prestador.especialidade} />}
+          <Row k="Vendedor" v={vendedorNome ?? "—"} />
           <Row k={prestador.tipo === "PJ" ? "Inscrição estadual" : "RG"} v={prestador.ie_rg ?? "—"} />
           <Row k="Telefone" v={prestador.telefone ?? "—"} />
           <Row k="E-mail" v={prestador.email ?? "—"} />

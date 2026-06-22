@@ -1,42 +1,45 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2, Briefcase, Phone } from "lucide-react";
+import { Plus, Pencil, Trash2, Briefcase, Phone, Wrench } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/client";
-import type { Vendedor } from "@/lib/supabase/types";
+import type { Prestador, Vendedor } from "@/lib/supabase/types";
 import { toast } from "sonner";
 
 export default function VendedoresPage() {
   const supabase = createClient();
   const [list, setList] = useState<Vendedor[]>([]);
+  const [prestadores, setPrestadores] = useState<Prestador[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Vendedor | null>(null);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<Vendedor | null>(null);
 
   useEffect(() => {
-    supabase
-      .from("vendedores")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .then(({ data, error }) => {
-        if (error) toast.error("Erro ao carregar vendedores", { description: error.message });
-        else setList(data ?? []);
-        setLoading(false);
-      });
+    Promise.all([
+      supabase.from("vendedores").select("*").order("created_at", { ascending: false }),
+      supabase.from("prestadores").select("*").order("nome"),
+    ]).then(([v, p]) => {
+      if (v.error) toast.error("Erro ao carregar vendedores", { description: v.error.message });
+      else setList(v.data ?? []);
+      setPrestadores(p.data ?? []);
+      setLoading(false);
+    });
   }, [supabase]);
 
-  const handleSave = async (v: { id?: string; nome: string; whatsapp: string }) => {
+  const handleSave = async (v: { id?: string; nome: string; whatsapp: string; prestadorIds: string[] }) => {
+    let vendedorId = v.id;
     if (v.id) {
       const { data, error } = await supabase
         .from("vendedores").update({ nome: v.nome, whatsapp: v.whatsapp }).eq("id", v.id).select().single();
@@ -48,8 +51,34 @@ export default function VendedoresPage() {
         .from("vendedores").insert({ nome: v.nome, whatsapp: v.whatsapp }).select().single();
       if (error) { toast.error("Erro ao adicionar", { description: error.message }); return; }
       setList(l => [data, ...l]);
+      vendedorId = data.id;
       toast.success("Adicionado");
     }
+
+    const vinculadosAntes = prestadores.filter(p => p.vendedor_id === vendedorId).map(p => p.id);
+    const paraVincular = v.prestadorIds.filter(id => !vinculadosAntes.includes(id));
+    const paraDesvincular = vinculadosAntes.filter(id => !v.prestadorIds.includes(id));
+    let vinculadosOk: string[] = [];
+    let desvinculadosOk: string[] = [];
+
+    if (paraVincular.length > 0) {
+      const { error } = await supabase.from("prestadores").update({ vendedor_id: vendedorId }).in("id", paraVincular);
+      if (error) toast.error("Erro ao vincular prestador(es)", { description: error.message });
+      else vinculadosOk = paraVincular;
+    }
+    if (paraDesvincular.length > 0) {
+      const { error } = await supabase.from("prestadores").update({ vendedor_id: null }).in("id", paraDesvincular);
+      if (error) toast.error("Erro ao desvincular prestador(es)", { description: error.message });
+      else desvinculadosOk = paraDesvincular;
+    }
+    if (vinculadosOk.length > 0 || desvinculadosOk.length > 0) {
+      setPrestadores(ps => ps.map(p => {
+        if (vinculadosOk.includes(p.id)) return { ...p, vendedor_id: vendedorId ?? null };
+        if (desvinculadosOk.includes(p.id)) return { ...p, vendedor_id: null };
+        return p;
+      }));
+    }
+
     setCreating(false); setEditing(null);
   };
 
@@ -96,6 +125,10 @@ export default function VendedoresPage() {
                 <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
                   <Phone className="h-3 w-3" />{v.whatsapp}
                 </div>
+                <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                  <Wrench className="h-3 w-3" />
+                  {prestadores.filter(p => p.vendedor_id === v.id).length} prestador(es) vinculado(s)
+                </div>
               </div>
               <div className="flex shrink-0">
                 <Button size="icon" variant="ghost" onClick={() => setEditing(v)}><Pencil className="h-4 w-4" /></Button>
@@ -109,6 +142,8 @@ export default function VendedoresPage() {
       <VendedorForm
         open={creating || editing !== null}
         vendedor={editing}
+        prestadores={prestadores}
+        vendedores={list}
         onClose={() => { setCreating(false); setEditing(null); }}
         onSave={handleSave}
       />
@@ -130,20 +165,36 @@ export default function VendedoresPage() {
 }
 
 function VendedorForm({
-  open, vendedor, onClose, onSave,
-}: { open: boolean; vendedor: Vendedor | null; onClose: () => void; onSave: (v: { id?: string; nome: string; whatsapp: string }) => void }) {
+  open, vendedor, prestadores, vendedores, onClose, onSave,
+}: {
+  open: boolean;
+  vendedor: Vendedor | null;
+  prestadores: Prestador[];
+  vendedores: Vendedor[];
+  onClose: () => void;
+  onSave: (v: { id?: string; nome: string; whatsapp: string; prestadorIds: string[] }) => void;
+}) {
   const [nome, setNome] = useState(vendedor?.nome ?? "");
   const [whatsapp, setWhatsapp] = useState(vendedor?.whatsapp ?? "");
+  const [prestadorIds, setPrestadorIds] = useState<string[]>([]);
 
   useEffect(() => {
     setNome(vendedor?.nome ?? "");
     setWhatsapp(vendedor?.whatsapp ?? "");
-  }, [vendedor, open]);
+    setPrestadorIds(prestadores.filter(p => p.vendedor_id === vendedor?.id).map(p => p.id));
+  }, [vendedor, open, prestadores]);
+
+  const toggle = (id: string) => {
+    setPrestadorIds(ids => ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]);
+  };
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>{vendedor ? "Editar vendedor" : "Novo vendedor"}</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>{vendedor ? "Editar vendedor" : "Novo vendedor"}</DialogTitle>
+          <DialogDescription>Escolha os prestadores de serviço que atendem só este vendedor.</DialogDescription>
+        </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="grid gap-1.5">
             <Label>Nome</Label>
@@ -153,10 +204,40 @@ function VendedorForm({
             <Label>WhatsApp</Label>
             <Input value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="+55 11 99999-9999" />
           </div>
+          <div className="grid gap-1.5">
+            <Label>Prestadores vinculados</Label>
+            {prestadores.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhum prestador cadastrado ainda.</p>
+            ) : (
+              <div className="max-h-52 overflow-y-auto rounded-xl border border-border divide-y divide-border">
+                {prestadores.map(p => {
+                  const outroVendedor = p.vendedor_id && p.vendedor_id !== vendedor?.id
+                    ? vendedores.find(v => v.id === p.vendedor_id)?.nome
+                    : null;
+                  return (
+                    <label key={p.id} className="flex items-start gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/40">
+                      <Checkbox
+                        checked={prestadorIds.includes(p.id)}
+                        onCheckedChange={() => toggle(p.id)}
+                        className="mt-0.5"
+                      />
+                      <div className="min-w-0">
+                        <div className="text-sm text-foreground truncate">{p.nome}</div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {p.especialidade || "—"}
+                          {outroVendedor && <span className="text-amber-600"> · vinculado a {outroVendedor}</span>}
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={() => onSave({ id: vendedor?.id, nome, whatsapp })} className="bg-primary hover:bg-[var(--primary-hover)]">Salvar</Button>
+          <Button onClick={() => onSave({ id: vendedor?.id, nome, whatsapp, prestadorIds })} className="bg-primary hover:bg-[var(--primary-hover)]">Salvar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

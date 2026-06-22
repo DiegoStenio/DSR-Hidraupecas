@@ -37,6 +37,7 @@ export type Prestador = {
   cidade: string | null;
   estado: string | null;
   observacoes: string | null;
+  vendedor_id: string | null;
   created_at: string;
 };
 
