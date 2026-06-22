@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
@@ -210,12 +211,15 @@ function NovoOrcamentoForm() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="cliente">Cliente</Label>
-              <Select value={clienteId} onValueChange={setClienteId}>
-                <SelectTrigger id="cliente"><SelectValue placeholder="Selecione um cliente" /></SelectTrigger>
-                <SelectContent>
-                  {clientes.map(c => <SelectItem key={c.id} value={c.id}>{c.nome} — {c.documento}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Combobox
+                id="cliente"
+                options={clientes.map(c => ({ value: c.id, label: `${c.nome} — ${c.documento}` }))}
+                value={clienteId}
+                onSelect={setClienteId}
+                placeholder="Selecione um cliente"
+                searchPlaceholder="Buscar por nome ou CPF/CNPJ…"
+                notFoundMessage="Nenhum cliente encontrado."
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="vendedor">Vendedor</Label>

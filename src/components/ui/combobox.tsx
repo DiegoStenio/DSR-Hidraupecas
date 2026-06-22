@@ -31,15 +31,17 @@ interface ComboboxProps {
     placeholder?: string;
     searchPlaceholder?: string;
     notFoundMessage?: string;
+    id?: string;
 }
 
-export function Combobox({ 
-    options, 
-    value, 
+export function Combobox({
+    options,
+    value,
     onSelect,
-    placeholder = "Select an option", 
-    searchPlaceholder = "Search...", 
-    notFoundMessage = "No option found." 
+    placeholder = "Select an option",
+    searchPlaceholder = "Search...",
+    notFoundMessage = "No option found.",
+    id,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
   const selectedOption = options.find((option) => option.value === value)
@@ -48,6 +50,7 @@ export function Combobox({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          id={id}
           variant="outline"
           role="combobox"
           aria-expanded={open}
