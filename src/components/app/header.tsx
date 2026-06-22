@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Menu, Moon, Search, Sun } from "lucide-react";
+import { AlertTriangle, Bell, Info, Menu, Moon, Search, Sun, TriangleAlert } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useTheme } from "@/hooks/use-theme";
 import {
@@ -22,16 +22,37 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/hooks/use-current-user";
+import type { Notificacao } from "@/app/api/notificacoes/route";
+
+const SEVERIDADE_ICON: Record<Notificacao["severidade"], typeof Info> = {
+  info: Info,
+  atencao: AlertTriangle,
+  urgente: TriangleAlert,
+};
+
+const SEVERIDADE_CLS: Record<Notificacao["severidade"], string> = {
+  info: "text-sky-600",
+  atencao: "text-amber-600",
+  urgente: "text-rose-600",
+};
 
 export function Header({ onOpenMobile }: { onOpenMobile: () => void }) {
   const { theme, toggle } = useTheme();
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
   const router = useRouter();
   const { user } = useCurrentUser();
   const fullName = ((user?.user_metadata?.full_name ?? user?.user_metadata?.name) as string | undefined)?.trim();
   const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
   const displayName = fullName || user?.email?.split("@")[0] || "Usuário";
   const initials = displayName.slice(0, 2).toUpperCase();
+
+  useEffect(() => {
+    fetch("/api/notificacoes")
+      .then((r) => r.json())
+      .then((d) => setNotificacoes(d.notificacoes ?? []))
+      .catch(() => setNotificacoes([]));
+  }, []);
 
   const signOut = async () => {
     const supabase = createClient();
@@ -85,13 +106,41 @@ export function Header({ onOpenMobile }: { onOpenMobile: () => void }) {
         >
           {theme === "dark" ? <Sun className="h-4 w-4" strokeWidth={1.5} /> : <Moon className="h-4 w-4" strokeWidth={1.5} />}
         </button>
-        <button
-          className="hidden sm:grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors relative"
-          aria-label="Notificações"
-        >
-          <Bell className="h-4 w-4" strokeWidth={1.5} />
-          <span className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-[var(--gold)]" />
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="hidden sm:grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors relative"
+              aria-label="Notificações"
+            >
+              <Bell className="h-4 w-4" strokeWidth={1.5} />
+              {notificacoes.length > 0 && (
+                <span className="absolute top-1.5 right-1.5 grid h-4 w-4 place-items-center rounded-full bg-[var(--gold)] text-[9px] font-bold text-[var(--gold-foreground)]">
+                  {notificacoes.length > 9 ? "9+" : notificacoes.length}
+                </span>
+              )}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-80">
+            <DropdownMenuLabel>Notificações</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {notificacoes.length === 0 ? (
+              <p className="px-2 py-4 text-center text-sm text-muted-foreground">Nenhuma notificação por aqui.</p>
+            ) : (
+              notificacoes.map((n) => {
+                const Icon = SEVERIDADE_ICON[n.severidade];
+                return (
+                  <DropdownMenuItem key={n.id} onClick={() => router.push(n.href)} className="flex items-start gap-2.5 py-2.5">
+                    <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${SEVERIDADE_CLS[n.severidade]}`} strokeWidth={1.5} />
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-foreground leading-snug">{n.titulo}</div>
+                      <div className="text-[11px] text-muted-foreground leading-snug mt-0.5">{n.descricao}</div>
+                    </div>
+                  </DropdownMenuItem>
+                );
+              })
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
