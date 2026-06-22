@@ -114,7 +114,7 @@ export default function ImprimirOrcamentoPage() {
           className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center opacity-[0.06]"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-dsr-dark.png" alt="" className="h-[140mm] w-[140mm] object-contain" />
+          <img src="/logo-dsr-light.png" alt="" className="h-[140mm] w-[140mm] object-contain" />
         </div>
 
         <header className="relative z-10 bg-[#0B1F3A] text-white p-8 flex items-center justify-between">
