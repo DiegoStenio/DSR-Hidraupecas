@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { createClient } from "@/lib/supabase/client";
 import type { Orcamento } from "@/lib/supabase/types";
+import { OrcamentoSendDialog } from "@/components/app/orcamento-send-dialog";
 import { toast } from "sonner";
 
 const fmt = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -55,6 +56,7 @@ export default function OrcamentosPage() {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"todos" | Orcamento["status"]>("todos");
   const [deleting, setDeleting] = useState<Orcamento | null>(null);
+  const [sendingId, setSendingId] = useState<string | null>(null);
 
   useEffect(() => {
     supabase
@@ -90,17 +92,6 @@ export default function OrcamentosPage() {
     if (error) { toast.error("Erro ao atualizar status", { description: error.message }); return; }
     setList(l => l.map(o => o.id === id ? { ...o, status } : o));
     toast.success(`Status atualizado para "${status}"`);
-  };
-
-  const handleSendWhatsapp = async (o: Orcamento) => {
-    if (!o.vendedor_id) { toast.error("Vendedor não vinculado a este orçamento."); return; }
-    const { data: vendedor } = await supabase.from("vendedores").select("*").eq("id", o.vendedor_id).single();
-    if (!vendedor?.whatsapp) {
-      toast.error("Número do WhatsApp não encontrado", { description: "O vendedor selecionado não possui WhatsApp cadastrado." });
-      return;
-    }
-    const message = encodeURIComponent(`Olá ${o.cliente_nome}, aqui está seu orçamento #${o.numero} com um total de ${fmt(o.total)}. Por favor me avise se tiver alguma dúvida.`);
-    window.open(`https://wa.me/${vendedor.whatsapp.replace(/\D/g, "")}?text=${message}`, "_blank");
   };
 
   return (
@@ -176,7 +167,7 @@ export default function OrcamentosPage() {
                       <Button size="icon" variant="ghost" asChild>
                         <Link href={`/orcamentos/${o.id}/imprimir`}><Download className="h-4 w-4" /></Link>
                       </Button>
-                      <Button size="icon" variant="ghost" onClick={() => handleSendWhatsapp(o)} className="text-emerald-600">
+                      <Button size="icon" variant="ghost" onClick={() => setSendingId(o.id)} className="text-emerald-600">
                         <Send className="h-4 w-4" />
                       </Button>
                       <Button size="icon" variant="ghost" onClick={() => setDeleting(o)} className="text-destructive">
@@ -209,7 +200,7 @@ export default function OrcamentosPage() {
                     <Button size="icon" variant="ghost" asChild>
                       <Link href={`/orcamentos/${o.id}/imprimir`}><Download className="h-4 w-4" /></Link>
                     </Button>
-                    <Button size="icon" variant="ghost" onClick={() => handleSendWhatsapp(o)} className="text-emerald-600"><Send className="h-4 w-4" /></Button>
+                    <Button size="icon" variant="ghost" onClick={() => setSendingId(o.id)} className="text-emerald-600"><Send className="h-4 w-4" /></Button>
                     <Button size="icon" variant="ghost" onClick={() => setDeleting(o)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 </div>
@@ -235,6 +226,12 @@ export default function OrcamentosPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <OrcamentoSendDialog
+        orcamentoId={sendingId}
+        open={sendingId !== null}
+        onOpenChange={(o) => !o && setSendingId(null)}
+      />
     </div>
   );
 }
