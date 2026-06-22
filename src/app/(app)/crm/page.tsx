@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Star, Phone, Mail, Globe, MapPin, Sparkles, Copy, UserPlus, Wrench, X, Loader2, Send,
-  Pencil, Plus, Trash2, ChevronLeft, ChevronRight, Archive, RotateCcw, Check,
+  Pencil, Plus, Trash2, ChevronLeft, ChevronRight, Archive, Check,
 } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
@@ -46,7 +47,6 @@ export default function CrmPage() {
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<Lead | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [arquivadosOpen, setArquivadosOpen] = useState(false);
   const [filtroTipo, setFiltroTipo] = useState<FiltroTipo>("todos");
   const [editingEtapa, setEditingEtapa] = useState<LeadEtapa | null>(null);
   const [addingEtapa, setAddingEtapa] = useState(false);
@@ -100,13 +100,6 @@ export default function CrmPage() {
     toast.success(arquivar ? `Atendimento finalizado — lead arquivado.` : `Lead movido para "${etapa.nome}".`);
   };
 
-  const reabrirLead = async (lead: Lead) => {
-    const { error } = await supabase.from("leads").update({ arquivado: false }).eq("id", lead.id);
-    if (error) { toast.error("Erro ao reabrir lead", { description: error.message }); return; }
-    setLeads((ls) => ls.map((l) => (l.id === lead.id ? { ...l, arquivado: false } : l)));
-    toast.success("Lead reaberto no pipeline.");
-  };
-
   const addEtapa = async (nome: string) => {
     const ordem = etapasOrdenadas.length > 0 ? etapasOrdenadas[etapasOrdenadas.length - 1].ordem + 1 : 1;
     const { data, error } = await supabase.from("lead_etapas").insert({ nome, ordem, cor: "slate", arquiva: false }).select().single();
@@ -158,10 +151,12 @@ export default function CrmPage() {
         subtitle="Pipeline visual de prospecção com inteligência da Apify + IA."
         actions={
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setArquivadosOpen(true)} className="gap-2">
-              <Archive className="h-4 w-4" />
-              Arquivados
-              <span className="text-xs tabular-nums opacity-70">{leadsArquivados.length}</span>
+            <Button variant="outline" asChild className="gap-2">
+              <Link href="/crm/arquivados">
+                <Archive className="h-4 w-4" />
+                Arquivados
+                <span className="text-xs tabular-nums opacity-70">{leadsArquivados.length}</span>
+              </Link>
             </Button>
             <Button onClick={() => setSearchOpen(true)} className="gap-2 bg-primary hover:bg-[var(--primary-hover)]">
               <Sparkles className="h-4 w-4" />
@@ -248,13 +243,6 @@ export default function CrmPage() {
         onDelete={deleteEtapa}
       />
       <AddEtapaDialog open={addingEtapa} onClose={() => setAddingEtapa(false)} onAdd={addEtapa} />
-      <ArquivadosDialog
-        open={arquivadosOpen}
-        onClose={() => setArquivadosOpen(false)}
-        leads={leadsArquivados}
-        etapas={etapas}
-        onReabrir={reabrirLead}
-      />
     </div>
   );
 }
@@ -479,39 +467,6 @@ function AddEtapaDialog({ open, onClose, onAdd }: { open: boolean; onClose: () =
             Criar
           </Button>
         </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function ArquivadosDialog({
-  open, onClose, leads, etapas, onReabrir,
-}: { open: boolean; onClose: () => void; leads: Lead[]; etapas: LeadEtapa[]; onReabrir: (l: Lead) => void }) {
-  const etapaNome = (id: string) => etapas.find((e) => e.id === id)?.nome ?? "—";
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Archive className="h-4 w-4" />Leads arquivados</DialogTitle>
-          <DialogDescription>Atendimentos finalizados. Reabra se precisar voltar ao pipeline ativo.</DialogDescription>
-        </DialogHeader>
-        {leads.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">Nenhum lead arquivado ainda.</p>
-        ) : (
-          <div className="space-y-2">
-            {leads.map((l) => (
-              <div key={l.id} className="flex items-center justify-between gap-3 rounded-xl border border-border p-3">
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-foreground truncate">{l.empresa}</div>
-                  <div className="text-xs text-muted-foreground">{etapaNome(l.etapa_id)}</div>
-                </div>
-                <Button size="sm" variant="outline" className="gap-1.5 shrink-0" onClick={() => onReabrir(l)}>
-                  <RotateCcw className="h-3.5 w-3.5" />Reabrir
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
       </DialogContent>
     </Dialog>
   );
