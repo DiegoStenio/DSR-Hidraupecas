@@ -17,7 +17,7 @@ import { useCountUp } from "@/hooks/use-theme";
 import { PageHeader } from "@/components/app/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/client";
-import type { LeadStatus, Orcamento } from "@/lib/supabase/types";
+import type { LeadEtapa, Orcamento } from "@/lib/supabase/types";
 import { toast } from "sonner";
 
 function formatBRL(v: number) {
@@ -56,14 +56,6 @@ function KpiCard({
   );
 }
 
-const FUNIL_ORDEM: { status: LeadStatus; label: string }[] = [
-  { status: "novo", label: "Novo" },
-  { status: "contatado", label: "Contatado" },
-  { status: "qualificado", label: "Qualificado" },
-  { status: "proposta", label: "Proposta" },
-  { status: "ganho", label: "Ganho" },
-];
-
 const DIAS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 export default function Dashboard() {
@@ -71,21 +63,30 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
   const [clientesCount, setClientesCount] = useState(0);
-  const [leadStatusCounts, setLeadStatusCounts] = useState<Record<string, number>>({});
+  const [etapas, setEtapas] = useState<LeadEtapa[]>([]);
+  const [leadEtapaCounts, setLeadEtapaCounts] = useState<Record<string, number>>({});
+  const [leadsArquivadosCount, setLeadsArquivadosCount] = useState(0);
 
   useEffect(() => {
     Promise.all([
       supabase.from("orcamentos").select("*"),
       supabase.from("clientes").select("*", { count: "exact", head: true }),
-      supabase.from("leads").select("status"),
-    ]).then(([orc, cli, leads]) => {
+      supabase.from("lead_etapas").select("*").order("ordem", { ascending: true }),
+      supabase.from("leads").select("etapa_id, arquivado"),
+    ]).then(([orc, cli, et, leads]) => {
       if (orc.error) toast.error("Erro ao carregar orçamentos", { description: orc.error.message });
       if (leads.error) toast.error("Erro ao carregar leads", { description: leads.error.message });
       setOrcamentos(orc.data ?? []);
       setClientesCount(cli.count ?? 0);
+      setEtapas(et.data ?? []);
       const counts: Record<string, number> = {};
-      (leads.data ?? []).forEach((l) => { counts[l.status] = (counts[l.status] ?? 0) + 1; });
-      setLeadStatusCounts(counts);
+      let arquivados = 0;
+      (leads.data ?? []).forEach((l) => {
+        counts[l.etapa_id] = (counts[l.etapa_id] ?? 0) + 1;
+        if (l.arquivado) arquivados += 1;
+      });
+      setLeadEtapaCounts(counts);
+      setLeadsArquivadosCount(arquivados);
       setLoading(false);
     });
   }, [supabase]);
@@ -116,9 +117,17 @@ export default function Dashboard() {
     });
   }, [orcamentos]);
 
-  const funilLeads = FUNIL_ORDEM.map(f => ({ ...f, qtd: leadStatusCounts[f.status] ?? 0 }));
+  const funilLeads = useMemo(() => {
+    const ativas = etapas.filter((e) => !e.arquiva).sort((a, b) => a.ordem - b.ordem);
+    return [
+      ...ativas.map((e) => ({ label: e.nome, qtd: leadEtapaCounts[e.id] ?? 0 })),
+      { label: "Finalizados", qtd: leadsArquivadosCount },
+    ];
+  }, [etapas, leadEtapaCounts, leadsArquivadosCount]);
   const maxFunil = Math.max(1, ...funilLeads.map((f) => f.qtd));
-  const conversao = funilLeads[0].qtd > 0 ? (funilLeads[funilLeads.length - 1].qtd / funilLeads[0].qtd) * 100 : 0;
+  const conversao = funilLeads[0] && funilLeads[0].qtd > 0
+    ? (funilLeads[funilLeads.length - 1].qtd / funilLeads[0].qtd) * 100
+    : 0;
 
   if (loading) {
     return (
@@ -222,7 +231,7 @@ export default function Dashboard() {
             const pct = (f.qtd / maxFunil) * 100;
             const isGold = i === funilLeads.length - 1;
             return (
-              <div key={f.status} className="grid grid-cols-[120px_1fr_60px] items-center gap-4">
+              <div key={f.label} className="grid grid-cols-[120px_1fr_60px] items-center gap-4">
                 <div className="text-sm font-medium text-foreground">{f.label}</div>
                 <div className="h-9 rounded-lg bg-muted overflow-hidden">
                   <div

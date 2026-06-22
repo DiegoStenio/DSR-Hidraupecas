@@ -67,6 +67,12 @@ export async function POST(request: Request) {
 
   const localizacao = [cidade, estado].filter(Boolean).join(", ");
 
+  const { data: primeiraEtapa } = await supabase
+    .from("lead_etapas").select("id").order("ordem", { ascending: true }).limit(1).single();
+  if (!primeiraEtapa) {
+    return NextResponse.json({ error: "Nenhuma etapa de pipeline configurada no CRM." }, { status: 500 });
+  }
+
   let clientesPlaces: ApifyPlace[] = [];
   let parceirosPlaces: ApifyPlace[] = [];
   try {
@@ -89,7 +95,8 @@ export async function POST(request: Request) {
     site: p.website ?? null,
     avaliacao: typeof p.totalScore === "number" ? p.totalScore : null,
     categoria: p.categoryName ?? null,
-    status: "novo" as const,
+    etapa_id: primeiraEtapa.id,
+    arquivado: false,
     origem: "apify" as const,
     tipo_negocio: tipo,
   });

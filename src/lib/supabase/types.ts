@@ -80,7 +80,17 @@ export type Orcamento = {
   created_at: string;
 };
 
-export type LeadStatus = "novo" | "contatado" | "qualificado" | "proposta" | "ganho" | "perdido";
+export type LeadEtapaCor = "blue" | "indigo" | "gold" | "purple" | "emerald" | "rose" | "slate";
+
+export type LeadEtapa = {
+  id: string;
+  nome: string;
+  ordem: number;
+  cor: LeadEtapaCor;
+  arquiva: boolean;
+  created_at: string;
+};
+
 export type LeadScore = "alto" | "medio" | "baixo";
 
 export type Lead = {
@@ -93,7 +103,8 @@ export type Lead = {
   site: string | null;
   avaliacao: number | null;
   categoria: string | null;
-  status: LeadStatus;
+  etapa_id: string;
+  arquivado: boolean;
   score: LeadScore | null;
   score_justificativa: string | null;
   sugestao_whatsapp: string | null;

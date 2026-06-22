@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  Search, Star, Phone, Mail, Globe, MapPin, Sparkles, Copy, UserPlus, Wrench, X, Loader2, Send,
+  Star, Phone, Mail, Globe, MapPin, Sparkles, Copy, UserPlus, Wrench, X, Loader2, Send,
+  Pencil, Plus, Trash2, ChevronLeft, ChevronRight, Archive, RotateCcw, Check,
 } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
@@ -13,18 +14,17 @@ import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/client";
-import type { Lead, LeadAtividade, LeadStatus } from "@/lib/supabase/types";
+import type { Lead, LeadAtividade, LeadEtapa, LeadEtapaCor } from "@/lib/supabase/types";
 import { toast } from "sonner";
 
-const COLS: LeadStatus[] = ["novo", "contatado", "qualificado", "proposta", "ganho", "perdido"];
-
-const statusLeadConfig: Record<LeadStatus, { label: string }> = {
-  novo: { label: "Novo" },
-  contatado: { label: "Contatado" },
-  qualificado: { label: "Qualificado" },
-  proposta: { label: "Proposta" },
-  ganho: { label: "Ganho" },
-  perdido: { label: "Perdido" },
+const CORES: Record<LeadEtapaCor, string> = {
+  blue: "bg-blue-500",
+  indigo: "bg-indigo-500",
+  gold: "bg-[var(--gold)]",
+  purple: "bg-purple-500",
+  emerald: "bg-emerald-500",
+  rose: "bg-rose-500",
+  slate: "bg-slate-400",
 };
 
 const scoreBadge = (s: Lead["score"]) => {
@@ -41,50 +41,114 @@ type FiltroTipo = "todos" | "cliente" | "parceiro";
 
 export default function CrmPage() {
   const supabase = createClient();
+  const [etapas, setEtapas] = useState<LeadEtapa[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<Lead | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [arquivadosOpen, setArquivadosOpen] = useState(false);
   const [filtroTipo, setFiltroTipo] = useState<FiltroTipo>("todos");
+  const [editingEtapa, setEditingEtapa] = useState<LeadEtapa | null>(null);
+  const [addingEtapa, setAddingEtapa] = useState(false);
 
   useEffect(() => {
-    supabase
-      .from("leads")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .then(({ data, error }) => {
-        if (error) toast.error("Erro ao carregar leads", { description: error.message });
-        else setLeads(data ?? []);
-        setLoading(false);
-      });
+    Promise.all([
+      supabase.from("lead_etapas").select("*").order("ordem", { ascending: true }),
+      supabase.from("leads").select("*").order("created_at", { ascending: false }),
+    ]).then(([et, ld]) => {
+      if (et.error) toast.error("Erro ao carregar etapas", { description: et.error.message });
+      if (ld.error) toast.error("Erro ao carregar leads", { description: ld.error.message });
+      setEtapas(et.data ?? []);
+      setLeads(ld.data ?? []);
+      setLoading(false);
+    });
   }, [supabase]);
 
+  const etapasOrdenadas = useMemo(() => [...etapas].sort((a, b) => a.ordem - b.ordem), [etapas]);
+  const leadsAtivos = useMemo(() => leads.filter((l) => !l.arquivado), [leads]);
+  const leadsArquivados = useMemo(() => leads.filter((l) => l.arquivado), [leads]);
+
   const leadsFiltrados = useMemo(
-    () => (filtroTipo === "todos" ? leads : leads.filter((l) => l.tipo_negocio === filtroTipo)),
-    [leads, filtroTipo],
+    () => (filtroTipo === "todos" ? leadsAtivos : leadsAtivos.filter((l) => l.tipo_negocio === filtroTipo)),
+    [leadsAtivos, filtroTipo],
   );
 
   const byCol = useMemo(() => {
-    const map: Record<LeadStatus, Lead[]> = { novo: [], contatado: [], qualificado: [], proposta: [], ganho: [], perdido: [] };
-    leadsFiltrados.forEach((l) => map[l.status].push(l));
+    const map: Record<string, Lead[]> = {};
+    etapasOrdenadas.forEach((e) => { map[e.id] = []; });
+    leadsFiltrados.forEach((l) => { (map[l.etapa_id] ??= []).push(l); });
     return map;
-  }, [leadsFiltrados]);
+  }, [leadsFiltrados, etapasOrdenadas]);
 
   const contagem = useMemo(
     () => ({
-      todos: leads.length,
-      cliente: leads.filter((l) => l.tipo_negocio === "cliente").length,
-      parceiro: leads.filter((l) => l.tipo_negocio === "parceiro").length,
+      todos: leadsAtivos.length,
+      cliente: leadsAtivos.filter((l) => l.tipo_negocio === "cliente").length,
+      parceiro: leadsAtivos.filter((l) => l.tipo_negocio === "parceiro").length,
     }),
-    [leads],
+    [leadsAtivos],
   );
 
-  const onDrop = async (status: LeadStatus, id: string) => {
-    setLeads((ls) => ls.map((l) => (l.id === id ? { ...l, status } : l)));
-    const { error } = await supabase.from("leads").update({ status }).eq("id", id);
+  const onDrop = async (etapa: LeadEtapa, id: string) => {
+    const arquivar = etapa.arquiva;
+    setLeads((ls) => ls.map((l) => (l.id === id ? { ...l, etapa_id: etapa.id, arquivado: arquivar } : l)));
+    const { error } = await supabase.from("leads").update({ etapa_id: etapa.id, arquivado: arquivar }).eq("id", id);
     if (error) { toast.error("Erro ao mover lead", { description: error.message }); return; }
-    await supabase.from("lead_atividades").insert({ lead_id: id, texto: `Status alterado para "${statusLeadConfig[status].label}"` });
-    toast.success(`Lead movido para "${statusLeadConfig[status].label}"`);
+    await supabase.from("lead_atividades").insert({
+      lead_id: id, texto: `Etapa alterada para "${etapa.nome}"${arquivar ? " — atendimento finalizado, lead arquivado" : ""}`,
+    });
+    toast.success(arquivar ? `Atendimento finalizado — lead arquivado.` : `Lead movido para "${etapa.nome}".`);
+  };
+
+  const reabrirLead = async (lead: Lead) => {
+    const { error } = await supabase.from("leads").update({ arquivado: false }).eq("id", lead.id);
+    if (error) { toast.error("Erro ao reabrir lead", { description: error.message }); return; }
+    setLeads((ls) => ls.map((l) => (l.id === lead.id ? { ...l, arquivado: false } : l)));
+    toast.success("Lead reaberto no pipeline.");
+  };
+
+  const addEtapa = async (nome: string) => {
+    const ordem = etapasOrdenadas.length > 0 ? etapasOrdenadas[etapasOrdenadas.length - 1].ordem + 1 : 1;
+    const { data, error } = await supabase.from("lead_etapas").insert({ nome, ordem, cor: "slate", arquiva: false }).select().single();
+    if (error || !data) { toast.error("Erro ao criar etapa", { description: error?.message }); return; }
+    setEtapas((es) => [...es, data]);
+    toast.success("Etapa criada");
+    setAddingEtapa(false);
+  };
+
+  const saveEtapa = async (id: string, patch: Partial<Pick<LeadEtapa, "nome" | "cor" | "arquiva">>) => {
+    const { error } = await supabase.from("lead_etapas").update(patch).eq("id", id);
+    if (error) { toast.error("Erro ao salvar etapa", { description: error.message }); return; }
+    setEtapas((es) => es.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+    toast.success("Etapa atualizada");
+    setEditingEtapa(null);
+  };
+
+  const deleteEtapa = async (etapa: LeadEtapa) => {
+    if (leads.some((l) => l.etapa_id === etapa.id)) {
+      toast.error("Não é possível excluir", { description: "Mova os leads desta etapa antes de excluir." });
+      return;
+    }
+    const { error } = await supabase.from("lead_etapas").delete().eq("id", etapa.id);
+    if (error) { toast.error("Erro ao excluir etapa", { description: error.message }); return; }
+    setEtapas((es) => es.filter((e) => e.id !== etapa.id));
+    toast.success("Etapa excluída");
+    setEditingEtapa(null);
+  };
+
+  const moveEtapa = async (etapa: LeadEtapa, dir: -1 | 1) => {
+    const idx = etapasOrdenadas.findIndex((e) => e.id === etapa.id);
+    const other = etapasOrdenadas[idx + dir];
+    if (!other) return;
+    await Promise.all([
+      supabase.from("lead_etapas").update({ ordem: other.ordem }).eq("id", etapa.id),
+      supabase.from("lead_etapas").update({ ordem: etapa.ordem }).eq("id", other.id),
+    ]);
+    setEtapas((es) => es.map((e) => {
+      if (e.id === etapa.id) return { ...e, ordem: other.ordem };
+      if (e.id === other.id) return { ...e, ordem: etapa.ordem };
+      return e;
+    }));
   };
 
   return (
@@ -93,10 +157,17 @@ export default function CrmPage() {
         title="CRM · Leads"
         subtitle="Pipeline visual de prospecção com inteligência da Apify + IA."
         actions={
-          <Button onClick={() => setSearchOpen(true)} className="gap-2 bg-primary hover:bg-[var(--primary-hover)]">
-            <Sparkles className="h-4 w-4" />
-            Buscar novos leads
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setArquivadosOpen(true)} className="gap-2">
+              <Archive className="h-4 w-4" />
+              Arquivados
+              <span className="text-xs tabular-nums opacity-70">{leadsArquivados.length}</span>
+            </Button>
+            <Button onClick={() => setSearchOpen(true)} className="gap-2 bg-primary hover:bg-[var(--primary-hover)]">
+              <Sparkles className="h-4 w-4" />
+              Buscar novos leads
+            </Button>
+          </div>
         }
       />
 
@@ -121,29 +192,39 @@ export default function CrmPage() {
 
       {loading ? (
         <div className="flex gap-4 overflow-x-auto pb-4">
-          {COLS.map((c) => <Skeleton key={c} className="w-[300px] h-[420px] rounded-2xl shrink-0" />)}
+          {[0, 1, 2, 3].map((c) => <Skeleton key={c} className="w-[300px] h-[420px] rounded-2xl shrink-0" />)}
         </div>
       ) : (
-        <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 md:mx-0 md:px-0 snap-x snap-mandatory md:snap-none">
-          {COLS.map((status) => {
-            const cfg = statusLeadConfig[status];
-            const items = byCol[status];
+        <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 md:mx-0 md:px-0 snap-x snap-mandatory md:snap-none items-start">
+          {etapasOrdenadas.map((etapa, i) => {
+            const items = byCol[etapa.id] ?? [];
             return (
               <KanbanColumn
-                key={status}
-                status={status}
-                label={cfg.label}
+                key={etapa.id}
+                etapa={etapa}
                 count={items.length}
-                onDrop={(id) => onDrop(status, id)}
+                onDrop={(id) => onDrop(etapa, id)}
+                onEdit={() => setEditingEtapa(etapa)}
+                canMoveLeft={i > 0}
+                canMoveRight={i < etapasOrdenadas.length - 1}
+                onMoveLeft={() => moveEtapa(etapa, -1)}
+                onMoveRight={() => moveEtapa(etapa, 1)}
               >
                 {items.length === 0 ? (
-                  <EmptyColumn status={status} onSearch={() => setSearchOpen(true)} />
+                  <EmptyColumn isFirst={i === 0} onSearch={() => setSearchOpen(true)} />
                 ) : (
                   items.map((l) => <LeadCard key={l.id} lead={l} onOpen={() => setActive(l)} />)
                 )}
               </KanbanColumn>
             );
           })}
+          <button
+            onClick={() => setAddingEtapa(true)}
+            className="w-[220px] shrink-0 snap-start rounded-2xl border-2 border-dashed border-border hover:border-[var(--gold)]/40 text-muted-foreground hover:text-foreground transition-colors min-h-[120px] flex flex-col items-center justify-center gap-2"
+          >
+            <Plus className="h-5 w-5" />
+            <span className="text-sm font-medium">Nova etapa</span>
+          </button>
         </div>
       )}
 
@@ -152,7 +233,6 @@ export default function CrmPage() {
         onClose={() => setActive(null)}
         onConverted={(field, id) => {
           setLeads((ls) => ls.map((l) => (l.id === active?.id ? { ...l, [field]: id } : l)));
-          setActive(null);
         }}
       />
       <SearchLeadsDialog
@@ -160,18 +240,37 @@ export default function CrmPage() {
         onOpenChange={setSearchOpen}
         onLeadsAdded={(novos) => setLeads((ls) => [...novos, ...ls])}
       />
+      <EtapaEditDialog
+        etapa={editingEtapa}
+        temLeads={editingEtapa ? leads.some((l) => l.etapa_id === editingEtapa.id) : false}
+        onClose={() => setEditingEtapa(null)}
+        onSave={saveEtapa}
+        onDelete={deleteEtapa}
+      />
+      <AddEtapaDialog open={addingEtapa} onClose={() => setAddingEtapa(false)} onAdd={addEtapa} />
+      <ArquivadosDialog
+        open={arquivadosOpen}
+        onClose={() => setArquivadosOpen(false)}
+        leads={leadsArquivados}
+        etapas={etapas}
+        onReabrir={reabrirLead}
+      />
     </div>
   );
 }
 
 function KanbanColumn({
-  status, label, count, children, onDrop,
+  etapa, count, children, onDrop, onEdit, canMoveLeft, canMoveRight, onMoveLeft, onMoveRight,
 }: {
-  status: LeadStatus;
-  label: string;
+  etapa: LeadEtapa;
   count: number;
   children: React.ReactNode;
   onDrop: (id: string) => void;
+  onEdit: () => void;
+  canMoveLeft: boolean;
+  canMoveRight: boolean;
+  onMoveLeft: () => void;
+  onMoveRight: () => void;
 }) {
   const [over, setOver] = useState(false);
   return (
@@ -185,17 +284,23 @@ function KanbanColumn({
         if (id) onDrop(id);
       }}
     >
-      <div className="flex items-center justify-between mb-3 px-1">
-        <div className="flex items-center gap-2">
-          <span className={`h-1.5 w-1.5 rounded-full ${
-            status === "ganho" ? "bg-emerald-500" :
-            status === "perdido" ? "bg-rose-500" :
-            status === "proposta" ? "bg-purple-500" :
-            status === "qualificado" ? "bg-[var(--gold)]" :
-            status === "contatado" ? "bg-indigo-500" : "bg-blue-500"
-          }`} />
-          <h3 className="text-sm font-semibold text-foreground">{label}</h3>
+      <div className="group flex items-center justify-between mb-3 px-1">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${CORES[etapa.cor]}`} />
+          <h3 className="text-sm font-semibold text-foreground truncate">{etapa.nome}</h3>
           <span className="text-xs text-muted-foreground tabular-nums">{count}</span>
+          {etapa.arquiva && <Archive className="h-3 w-3 text-muted-foreground shrink-0" />}
+        </div>
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+          <button disabled={!canMoveLeft} onClick={onMoveLeft} className="grid h-6 w-6 place-items-center rounded-md hover:bg-muted disabled:opacity-30 text-muted-foreground">
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </button>
+          <button disabled={!canMoveRight} onClick={onMoveRight} className="grid h-6 w-6 place-items-center rounded-md hover:bg-muted disabled:opacity-30 text-muted-foreground">
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={onEdit} className="grid h-6 w-6 place-items-center rounded-md hover:bg-muted text-muted-foreground">
+            <Pencil className="h-3 w-3" />
+          </button>
         </div>
       </div>
       <div className={`rounded-2xl p-2 min-h-[400px] transition-colors ${
@@ -251,24 +356,164 @@ function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
   );
 }
 
-function EmptyColumn({ status, onSearch }: { status: LeadStatus; onSearch: () => void }) {
-  const txt: Record<LeadStatus, string> = {
-    novo: "Nenhum lead novo. Que tal buscar os primeiros?",
-    contatado: "Nada por aqui — comece movendo um lead novo.",
-    qualificado: "Qualifique leads contatados para vê-los aqui.",
-    proposta: "Nenhuma proposta em aberto.",
-    ganho: "Sem vitórias ainda esta semana.",
-    perdido: "Nada perdido. Excelente.",
-  };
+function EmptyColumn({ isFirst, onSearch }: { isFirst: boolean; onSearch: () => void }) {
   return (
     <div className="py-10 px-3 text-center">
-      <p className="text-xs text-muted-foreground leading-relaxed">{txt[status]}</p>
-      {status === "novo" && (
+      <p className="text-xs text-muted-foreground leading-relaxed">
+        {isFirst ? "Nenhum lead aqui. Que tal buscar os primeiros?" : "Nenhum lead nesta etapa."}
+      </p>
+      {isFirst && (
         <button onClick={onSearch} className="mt-3 text-xs font-medium text-[var(--gold)] hover:text-[var(--gold-soft)]">
           Buscar leads →
         </button>
       )}
     </div>
+  );
+}
+
+function EtapaEditDialog({
+  etapa, temLeads, onClose, onSave, onDelete,
+}: {
+  etapa: LeadEtapa | null;
+  temLeads: boolean;
+  onClose: () => void;
+  onSave: (id: string, patch: Partial<Pick<LeadEtapa, "nome" | "cor" | "arquiva">>) => void;
+  onDelete: (etapa: LeadEtapa) => void;
+}) {
+  const [nome, setNome] = useState("");
+  const [cor, setCor] = useState<LeadEtapaCor>("blue");
+  const [arquiva, setArquiva] = useState(false);
+
+  useEffect(() => {
+    if (etapa) { setNome(etapa.nome); setCor(etapa.cor); setArquiva(etapa.arquiva); }
+  }, [etapa]);
+
+  if (!etapa) return null;
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Editar etapa</DialogTitle>
+          <DialogDescription>Personalize o nome, a cor e o comportamento desta etapa do pipeline.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="grid gap-1.5">
+            <Label>Nome</Label>
+            <Input value={nome} onChange={(e) => setNome(e.target.value)} />
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Cor</Label>
+            <div className="flex gap-2">
+              {(Object.keys(CORES) as LeadEtapaCor[]).map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCor(c)}
+                  className={`h-7 w-7 rounded-full ${CORES[c]} flex items-center justify-center ring-offset-2 ${
+                    cor === c ? "ring-2 ring-foreground" : ""
+                  }`}
+                >
+                  {cor === c && <Check className="h-3.5 w-3.5 text-white" />}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="flex items-start gap-2.5 rounded-lg border border-border p-3 cursor-pointer">
+            <Checkbox checked={arquiva} onCheckedChange={(v) => setArquiva(Boolean(v))} className="mt-0.5" />
+            <span>
+              <span className="text-sm text-foreground font-medium block">Arquivar automaticamente</span>
+              <span className="text-xs text-muted-foreground">Ao finalizar o atendimento e mover um lead pra esta etapa, ele some do pipeline ativo (ex: Ganho, Perdido).</span>
+            </span>
+          </label>
+          {temLeads && (
+            <p className="text-xs text-muted-foreground">Esta etapa tem leads — mova-os antes de excluir.</p>
+          )}
+        </div>
+        <DialogFooter className="gap-2">
+          <Button
+            variant="outline"
+            className="text-destructive hover:text-destructive gap-2"
+            disabled={temLeads}
+            onClick={() => onDelete(etapa)}
+          >
+            <Trash2 className="h-4 w-4" />Excluir
+          </Button>
+          <Button
+            className="bg-primary hover:bg-[var(--primary-hover)]"
+            onClick={() => onSave(etapa.id, { nome, cor, arquiva })}
+          >
+            Salvar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AddEtapaDialog({ open, onClose, onAdd }: { open: boolean; onClose: () => void; onAdd: (nome: string) => void }) {
+  const [nome, setNome] = useState("");
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) { onClose(); setNome(""); } }}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Nova etapa</DialogTitle>
+          <DialogDescription>Adiciona uma coluna ao pipeline do CRM.</DialogDescription>
+        </DialogHeader>
+        <div className="py-2">
+          <Input
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            placeholder="Ex: Em negociação"
+            onKeyDown={(e) => { if (e.key === "Enter" && nome.trim()) { onAdd(nome.trim()); setNome(""); } }}
+            autoFocus
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button
+            disabled={!nome.trim()}
+            className="bg-primary hover:bg-[var(--primary-hover)]"
+            onClick={() => { onAdd(nome.trim()); setNome(""); }}
+          >
+            Criar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ArquivadosDialog({
+  open, onClose, leads, etapas, onReabrir,
+}: { open: boolean; onClose: () => void; leads: Lead[]; etapas: LeadEtapa[]; onReabrir: (l: Lead) => void }) {
+  const etapaNome = (id: string) => etapas.find((e) => e.id === id)?.nome ?? "—";
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Archive className="h-4 w-4" />Leads arquivados</DialogTitle>
+          <DialogDescription>Atendimentos finalizados. Reabra se precisar voltar ao pipeline ativo.</DialogDescription>
+        </DialogHeader>
+        {leads.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">Nenhum lead arquivado ainda.</p>
+        ) : (
+          <div className="space-y-2">
+            {leads.map((l) => (
+              <div key={l.id} className="flex items-center justify-between gap-3 rounded-xl border border-border p-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-foreground truncate">{l.empresa}</div>
+                  <div className="text-xs text-muted-foreground">{etapaNome(l.etapa_id)}</div>
+                </div>
+                <Button size="sm" variant="outline" className="gap-1.5 shrink-0" onClick={() => onReabrir(l)}>
+                  <RotateCcw className="h-3.5 w-3.5" />Reabrir
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -303,34 +548,8 @@ function LeadDrawer({
     toast.success("Mensagem copiada!");
   };
 
-  const ehParceiro = lead.tipo_negocio === "parceiro";
-
-  const converterLead = async () => {
+  const cadastrarComoCliente = async () => {
     setConverting(true);
-    if (ehParceiro) {
-      const { data: prestador, error } = await supabase.from("prestadores").insert({
-        tipo: "PJ",
-        nome: lead.empresa,
-        documento: "",
-        especialidade: lead.categoria,
-        telefone: lead.telefone,
-        email: lead.email,
-        cidade: null,
-        estado: null,
-      }).select().single();
-      if (error || !prestador) {
-        toast.error("Erro ao converter lead", { description: error?.message });
-        setConverting(false);
-        return;
-      }
-      await supabase.from("leads").update({ converted_prestador_id: prestador.id, status: "ganho" }).eq("id", lead.id);
-      await supabase.from("lead_atividades").insert({ lead_id: lead.id, texto: `Convertido em prestador: ${prestador.nome}` });
-      toast.success("Convertido em prestador!");
-      setConverting(false);
-      onConverted("converted_prestador_id", prestador.id);
-      return;
-    }
-
     const { data: cliente, error } = await supabase.from("clientes").insert({
       tipo: "PJ",
       nome: lead.empresa,
@@ -343,16 +562,38 @@ function LeadDrawer({
       ia_upsell: [],
       ia_resumo: null,
     }).select().single();
+    setConverting(false);
     if (error || !cliente) {
-      toast.error("Erro ao converter lead", { description: error?.message });
-      setConverting(false);
+      toast.error("Erro ao cadastrar cliente", { description: error?.message });
       return;
     }
-    await supabase.from("leads").update({ converted_cliente_id: cliente.id, status: "ganho" }).eq("id", lead.id);
-    await supabase.from("lead_atividades").insert({ lead_id: lead.id, texto: `Convertido em cliente: ${cliente.nome}` });
-    toast.success("Convertido em cliente!");
-    setConverting(false);
+    await supabase.from("leads").update({ converted_cliente_id: cliente.id }).eq("id", lead.id);
+    await supabase.from("lead_atividades").insert({ lead_id: lead.id, texto: `Cadastrado como cliente: ${cliente.nome}` });
+    toast.success("Cadastrado como cliente!");
     onConverted("converted_cliente_id", cliente.id);
+  };
+
+  const cadastrarComoParceiro = async () => {
+    setConverting(true);
+    const { data: prestador, error } = await supabase.from("prestadores").insert({
+      tipo: "PJ",
+      nome: lead.empresa,
+      documento: "",
+      especialidade: lead.categoria,
+      telefone: lead.telefone,
+      email: lead.email,
+      cidade: null,
+      estado: null,
+    }).select().single();
+    setConverting(false);
+    if (error || !prestador) {
+      toast.error("Erro ao cadastrar prestador", { description: error?.message });
+      return;
+    }
+    await supabase.from("leads").update({ converted_prestador_id: prestador.id }).eq("id", lead.id);
+    await supabase.from("lead_atividades").insert({ lead_id: lead.id, texto: `Cadastrado como prestador: ${prestador.nome}` });
+    toast.success("Cadastrado como prestador!");
+    onConverted("converted_prestador_id", prestador.id);
   };
 
   return (
@@ -447,16 +688,22 @@ function LeadDrawer({
 
           <div className="flex gap-2 pt-2">
             <Button
-              className="flex-1 gap-2 bg-primary hover:bg-[var(--primary-hover)]"
-              disabled={converting || !!lead.converted_cliente_id || !!lead.converted_prestador_id}
-              onClick={converterLead}
+              variant={lead.converted_cliente_id ? "outline" : "default"}
+              className={`flex-1 gap-2 ${lead.converted_cliente_id ? "" : "bg-primary hover:bg-[var(--primary-hover)]"}`}
+              disabled={converting || !!lead.converted_cliente_id}
+              onClick={cadastrarComoCliente}
             >
-              {ehParceiro ? <Wrench className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
-              {lead.converted_cliente_id || lead.converted_prestador_id
-                ? "Já convertido"
-                : converting
-                  ? "Convertendo…"
-                  : ehParceiro ? "Converter em prestador" : "Converter em cliente"}
+              <UserPlus className="h-4 w-4" />
+              {lead.converted_cliente_id ? "Já é cliente" : converting ? "Cadastrando…" : "Cadastrar como cliente"}
+            </Button>
+            <Button
+              variant={lead.converted_prestador_id ? "outline" : "default"}
+              className={`flex-1 gap-2 ${lead.converted_prestador_id ? "" : "bg-primary hover:bg-[var(--primary-hover)]"}`}
+              disabled={converting || !!lead.converted_prestador_id}
+              onClick={cadastrarComoParceiro}
+            >
+              <Wrench className="h-4 w-4" />
+              {lead.converted_prestador_id ? "Já é parceiro" : converting ? "Cadastrando…" : "Cadastrar como parceiro"}
             </Button>
           </div>
         </div>
