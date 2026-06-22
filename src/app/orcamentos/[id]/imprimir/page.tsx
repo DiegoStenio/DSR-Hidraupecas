@@ -108,8 +108,16 @@ export default function ImprimirOrcamentoPage() {
         </Button>
       </div>
 
-      <div ref={printRef} className="w-[210mm] mx-auto bg-white text-black shadow-lg font-sans text-xs">
-        <header className="bg-[#0B1F3A] text-white p-8 flex items-center justify-between">
+      <div ref={printRef} className="relative w-[210mm] mx-auto overflow-hidden bg-white text-black shadow-lg font-sans text-xs">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center opacity-[0.06]"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-dsr-dark.png" alt="" className="h-[140mm] w-[140mm] object-contain" />
+        </div>
+
+        <header className="relative z-10 bg-[#0B1F3A] text-white p-8 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-dsr-dark.png" alt="Logo" className="h-14 w-14 object-contain shrink-0" />
@@ -127,7 +135,7 @@ export default function ImprimirOrcamentoPage() {
           </div>
         </header>
 
-        <section className="px-8 pt-6">
+        <section className="relative z-10 px-8 pt-6">
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div className="border p-3 rounded-md">
               <h3 className="font-bold mb-1 uppercase">Cliente:</h3>
@@ -215,7 +223,7 @@ export default function ImprimirOrcamentoPage() {
           </div>
         </section>
 
-        <footer className="border-t-2 border-black pt-4 px-8 pb-8 grid grid-cols-2 gap-8">
+        <footer className="relative z-10 border-t-2 border-black pt-4 px-8 pb-8 grid grid-cols-2 gap-8">
           <div>
             {orcamento.plano && (
               <>
