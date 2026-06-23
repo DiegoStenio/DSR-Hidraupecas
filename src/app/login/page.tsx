@@ -37,10 +37,9 @@ export default function LoginPage() {
     >
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-3">
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-[#c9a227] text-[#0b1f3a] font-display text-lg font-bold">
-              D
-            </div>
+          <div className="inline-flex items-center gap-2.5 mb-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-dsr-dark.png" alt="DSR-Hidraupeças" className="h-10 w-10 object-contain" />
             <span className="font-display text-2xl font-semibold text-white tracking-tight">
               DSR-Hidraupecas
             </span>
