@@ -28,13 +28,28 @@ export default function LoginPage() {
   };
 
   return (
-    <div
-      className="min-h-screen w-full grid place-items-center px-4"
-      style={{
-        background:
-          "radial-gradient(1100px 600px at 85% 10%, #14315c 0%, #0b1f3a 55%, #07101f 100%)",
-      }}
-    >
+    <div className="relative min-h-screen w-full overflow-hidden">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/login-bg-desktop.jpg"
+        alt=""
+        className="absolute inset-0 hidden h-full w-full object-cover md:block"
+      />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/login-bg-mobile.jpg"
+        alt=""
+        className="absolute inset-0 h-full w-full object-cover md:hidden"
+      />
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(1100px 600px at 85% 10%, rgba(20,49,92,0.88) 0%, rgba(11,31,58,0.92) 55%, rgba(7,16,31,0.96) 100%)",
+        }}
+      />
+
+      <div className="relative z-10 grid min-h-screen w-full place-items-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2.5 mb-3">
@@ -106,6 +121,7 @@ export default function LoginPage() {
         <p className="mt-6 text-center text-xs text-white/40">
           © 2026 DSR-Hidraupecas · Todos os direitos reservados
         </p>
+      </div>
       </div>
     </div>
   );
