@@ -29,18 +29,11 @@ export default function LoginPage() {
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/login-bg-desktop.jpg"
-        alt=""
-        className="absolute inset-0 hidden h-full w-full object-cover md:block"
-      />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/login-bg-mobile.jpg"
-        alt=""
-        className="absolute inset-0 h-full w-full object-cover md:hidden"
-      />
+      <picture>
+        <source media="(min-width: 768px)" srcSet="/login-bg-desktop.jpg" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/login-bg-mobile.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />
+      </picture>
       <div
         className="absolute inset-0"
         style={{
