@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Sidebar } from "@/components/app/sidebar";
 import { Header } from "@/components/app/header";
+import { BottomNav } from "@/components/app/bottom-nav";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -10,7 +11,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
       <Sidebar mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />
-      <div className="relative flex flex-1 flex-col min-w-0 overflow-hidden">
+      <div className="relative flex flex-1 flex-col min-w-0 overflow-hidden ambient-glow">
         <Header onOpenMobile={() => setMobileOpen(true)} />
         <div
           aria-hidden
@@ -21,7 +22,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo-dsr-dark.png" alt="" className="hidden h-[55vh] w-[55vh] object-contain dark:block" />
         </div>
-        <main className="relative z-10 flex-1 min-w-0 p-4 md:p-8">{children}</main>
+        <main className="relative z-10 flex-1 min-w-0 p-4 md:p-8 pb-20 md:pb-8">{children}</main>
+        <BottomNav onOpenMobile={() => setMobileOpen(true)} />
       </div>
     </div>
   );

@@ -46,20 +46,20 @@ function KpiCard({
 }) {
   const v = useCountUp(value);
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 shadow-sm hover:border-[var(--gold)]/40 transition-colors">
+    <div className="rounded-2xl border border-border/85 bg-card p-5 shadow-premium hover:border-[var(--gold)]/50 hover:-translate-y-0.5 transition-all duration-300 group">
       <div className="flex items-start justify-between">
-        <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
           {label}
         </div>
-        <div className="grid h-9 w-9 place-items-center rounded-xl bg-muted text-foreground">
-          <Icon className="h-4 w-4" strokeWidth={1.5} />
+        <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/5 text-primary dark:bg-primary/20 dark:text-primary-foreground transition-colors group-hover:bg-primary/10">
+          <Icon className="h-5 w-5" strokeWidth={1.75} />
         </div>
       </div>
-      <div className="mt-4 font-display text-4xl font-semibold text-foreground tabular-nums">
+      <div className="mt-4 font-display text-3xl font-bold text-foreground tabular-nums tracking-tight">
         {money ? formatBRL(v) : v.toLocaleString("pt-BR")}
       </div>
       {hint && (
-        <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground bg-muted/40 w-fit px-2 py-0.5 rounded-md">
           <span>{hint}</span>
         </div>
       )}
@@ -193,7 +193,7 @@ export default function Dashboard() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Bar chart */}
-        <div className="lg:col-span-2 rounded-2xl border border-border bg-card p-6 shadow-sm">
+        <div className="lg:col-span-2 rounded-2xl border border-border/80 bg-card p-6 shadow-premium">
           <div className="flex items-center justify-between mb-1">
             <div>
               <h2 className="text-base font-semibold text-foreground">Orçamentos nos últimos 7 dias</h2>
@@ -207,6 +207,12 @@ export default function Dashboard() {
           <div className="h-64 mt-4 -mx-2">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={ultimos7Dias} barCategoryGap={20}>
+                <defs>
+                  <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--gold-soft)" stopOpacity={1} />
+                    <stop offset="100%" stopColor="var(--gold)" stopOpacity={0.85} />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                 <XAxis dataKey="dia" stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
                 <YAxis stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} width={28} allowDecimals={false} />
@@ -219,22 +225,23 @@ export default function Dashboard() {
                     fontSize: 12,
                   }}
                 />
-                <Bar dataKey="quantidade" fill="var(--primary)" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="quantidade" fill="url(#barGradient)" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         {/* Resumo IA */}
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm flex flex-col">
-          <div className="flex items-start justify-between">
+        <div className="rounded-2xl border border-[var(--gold)]/30 bg-gradient-to-b from-card to-[var(--gold)]/5 p-6 shadow-premium flex flex-col relative overflow-hidden">
+          <div className="absolute top-0 right-0 h-24 w-24 bg-gradient-to-bl from-[var(--gold)]/10 to-transparent rounded-bl-full pointer-events-none" />
+          <div className="flex items-start justify-between z-10">
             <div className="flex items-center gap-2">
-              <div className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--gold)]/15">
-                <Sparkles className="h-4 w-4 text-[var(--gold)]" strokeWidth={1.5} />
+              <div className="grid h-9 w-9 place-items-center rounded-xl bg-[var(--gold)]/20 shadow-sm">
+                <Sparkles className="h-4.5 w-4.5 text-[var(--gold)]" strokeWidth={1.75} />
               </div>
               <div>
                 <h2 className="text-base font-semibold text-foreground">Resumo inteligente</h2>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
                   {resumoAtualizadoEm ? `Atualizado ${formatRelativo(resumoAtualizadoEm)}` : "Ainda não gerado"}
                 </p>
               </div>
@@ -242,24 +249,28 @@ export default function Dashboard() {
             <button
               onClick={gerarResumo}
               disabled={gerandoResumo}
-              className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
+              className="grid h-9 w-9 place-items-center rounded-xl border border-border/80 bg-card text-muted-foreground hover:bg-muted hover:text-foreground transition-all disabled:opacity-50 shadow-sm"
               aria-label="Gerar resumo"
             >
-              <RefreshCw className={`h-4 w-4 ${gerandoResumo ? "animate-spin" : ""}`} strokeWidth={1.5} />
+              <RefreshCw className={`h-4 w-4 ${gerandoResumo ? "animate-spin" : ""}`} strokeWidth={1.75} />
             </button>
           </div>
-          {resumoIa ? (
-            <p className="mt-4 text-sm leading-relaxed text-foreground/90">{resumoIa}</p>
-          ) : (
-            <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-              {gerandoResumo ? "Gerando resumo com IA…" : "Clique no ícone de atualizar para a IA analisar seus dados e gerar um resumo executivo."}
-            </p>
-          )}
+          <div className="mt-4 flex-1 z-10">
+            {resumoIa ? (
+              <div className="border-l-2 border-[var(--gold)]/50 pl-4 py-1 text-sm leading-relaxed text-foreground/90 font-medium italic">
+                {resumoIa}
+              </div>
+            ) : (
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                {gerandoResumo ? "Gerando resumo com IA…" : "Clique no ícone de atualizar para a IA analisar seus dados e gerar um resumo executivo."}
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Funil */}
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+      <div className="rounded-2xl border border-border/80 bg-card p-6 shadow-premium">
         <div className="flex items-end justify-between mb-5">
           <div>
             <h2 className="text-base font-semibold text-foreground">Funil de leads</h2>

@@ -89,16 +89,16 @@ export function Sidebar({ mobileOpen, onCloseMobile }: { mobileOpen: boolean; on
                 href={item.to}
                 onClick={onCloseMobile}
                 className={cn(
-                  "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+                  "group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all duration-200",
                   active
-                    ? "bg-[var(--sidebar-accent)] text-white"
-                    : "text-[var(--sidebar-muted)] hover:text-white hover:bg-[var(--sidebar-accent)]/60",
+                    ? "bg-[var(--sidebar-accent)] text-white shadow-sm font-semibold"
+                    : "text-[var(--sidebar-muted)] hover:text-white hover:bg-[var(--sidebar-accent)]/40",
                 )}
               >
-                <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={1.5} />
+                <Icon className={cn("h-[18px] w-[18px] shrink-0 transition-transform duration-200 group-hover:scale-105", active && "text-[var(--gold)]")} strokeWidth={1.75} />
                 {!collapsed && <span className="truncate">{item.label}</span>}
                 {active && (
-                  <span className="absolute left-3 right-3 -bottom-0.5 h-[2px] rounded bg-[var(--gold)]" />
+                  <span className="absolute left-0 top-2.5 bottom-2.5 w-[3px] rounded-r bg-[var(--gold)]" />
                 )}
               </Link>
             );

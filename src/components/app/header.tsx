@@ -78,10 +78,10 @@ export function Header({ onOpenMobile }: { onOpenMobile: () => void }) {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/85 px-4 backdrop-blur-md md:px-6">
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border/80 bg-background/70 px-4 backdrop-blur-lg md:px-6">
       <button
         onClick={onOpenMobile}
-        className="grid h-9 w-9 place-items-center rounded-lg text-foreground hover:bg-muted md:hidden"
+        className="hidden h-9 w-9 place-items-center rounded-lg text-foreground hover:bg-muted"
         aria-label="Abrir menu"
       >
         <Menu className="h-5 w-5" strokeWidth={1.5} />
