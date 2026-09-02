@@ -724,9 +724,21 @@ function LeadDrawer({
               <div className="rounded-xl bg-card border border-border p-3">
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center justify-between">
                   <span>Mensagem sugerida (WhatsApp)</span>
-                  <button onClick={copy} className="inline-flex items-center gap-1 text-foreground hover:text-[var(--gold)] transition-colors">
-                    <Copy className="h-3 w-3" />Copiar
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button onClick={copy} className="inline-flex items-center gap-1 text-foreground hover:text-[var(--gold)] transition-colors">
+                      <Copy className="h-3 w-3" />Copiar
+                    </button>
+                    {lead.telefone && (
+                      <a
+                        href={`https://wa.me/${lead.telefone.replace(/\D/g, "")}?text=${encodeURIComponent(lead.sugestao_whatsapp)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-emerald-600 hover:text-emerald-500 transition-colors"
+                      >
+                        <Send className="h-3 w-3" />Enviar
+                      </a>
+                    )}
+                  </div>
                 </div>
                 <p className="text-sm leading-relaxed text-foreground">{lead.sugestao_whatsapp}</p>
               </div>
