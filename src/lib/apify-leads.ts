@@ -10,6 +10,7 @@ type ApifyPlace = {
   website?: string;
   totalScore?: number;
   categoryName?: string;
+  location?: { lat?: number; lng?: number };
 };
 
 async function runApifySearch(termos: string[], localizacao: string, token: string): Promise<ApifyPlace[]> {
@@ -81,6 +82,8 @@ export async function buscarLeadsApify(
     site: p.website ?? null,
     avaliacao: typeof p.totalScore === "number" ? p.totalScore : null,
     categoria: p.categoryName ?? null,
+    lat: typeof p.location?.lat === "number" ? p.location.lat : null,
+    lng: typeof p.location?.lng === "number" ? p.location.lng : null,
     etapa_id: primeiraEtapa.id,
     arquivado: false,
     origem: "apify" as const,

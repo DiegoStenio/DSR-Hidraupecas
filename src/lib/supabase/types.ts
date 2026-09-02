@@ -104,6 +104,8 @@ export type Lead = {
   site: string | null;
   avaliacao: number | null;
   categoria: string | null;
+  lat: number | null;
+  lng: number | null;
   etapa_id: string;
   arquivado: boolean;
   score: LeadScore | null;

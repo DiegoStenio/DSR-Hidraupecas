@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Star, Phone, Mail, Globe, MapPin, Sparkles, Copy, UserPlus, Wrench, X, Loader2, Send,
-  Pencil, Plus, Trash2, ChevronLeft, ChevronRight, Archive, Check,
+  Pencil, Plus, Trash2, ChevronLeft, ChevronRight, Archive, Check, Route,
 } from "lucide-react";
+import { ordenarRota, gerarUrlGoogleMaps } from "@/lib/rota";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -50,6 +51,8 @@ export default function CrmPage() {
   const [filtroTipo, setFiltroTipo] = useState<FiltroTipo>("todos");
   const [editingEtapa, setEditingEtapa] = useState<LeadEtapa | null>(null);
   const [addingEtapa, setAddingEtapa] = useState(false);
+  const [modoRota, setModoRota] = useState(false);
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     Promise.all([
@@ -88,6 +91,36 @@ export default function CrmPage() {
     }),
     [leadsAtivos],
   );
+
+  const toggleSelecionado = (id: string) => {
+    setSelecionados((s) => {
+      const novo = new Set(s);
+      if (novo.has(id)) novo.delete(id); else novo.add(id);
+      return novo;
+    });
+  };
+
+  const cancelarModoRota = () => { setModoRota(false); setSelecionados(new Set()); };
+
+  const tracarRota = () => {
+    const selecao = leadsAtivos.filter((l) => selecionados.has(l.id));
+    const comCoordenadas = selecao.filter((l) => l.lat != null && l.lng != null);
+    const semCoordenadas = selecao.length - comCoordenadas.length;
+
+    if (comCoordenadas.length < 2) {
+      toast.error("Coordenadas insuficientes pra traçar rota", {
+        description: "Pelo menos 2 dos leads selecionados precisam ter localização salva. Leads buscados antes desta atualização não têm coordenada — só os buscados a partir de agora.",
+      });
+      return;
+    }
+    if (semCoordenadas > 0) {
+      toast.warning(`${semCoordenadas} lead(s) sem localização foram ignorados na rota.`);
+    }
+
+    const pontos = comCoordenadas.map((l) => ({ id: l.id, lat: l.lat!, lng: l.lng! }));
+    const ordenados = ordenarRota(pontos);
+    window.open(gerarUrlGoogleMaps(ordenados), "_blank");
+  };
 
   const onDrop = async (etapa: LeadEtapa, id: string) => {
     const arquivar = etapa.arquiva;
@@ -158,6 +191,14 @@ export default function CrmPage() {
                 <span className="text-xs tabular-nums opacity-70">{leadsArquivados.length}</span>
               </Link>
             </Button>
+            <Button
+              variant={modoRota ? "default" : "outline"}
+              onClick={() => (modoRota ? cancelarModoRota() : setModoRota(true))}
+              className={`gap-2 ${modoRota ? "bg-primary hover:bg-[var(--primary-hover)]" : ""}`}
+            >
+              <Route className="h-4 w-4" />
+              {modoRota ? "Cancelar seleção" : "Traçar rota"}
+            </Button>
             <Button onClick={() => setSearchOpen(true)} className="gap-2 bg-primary hover:bg-[var(--primary-hover)]">
               <Sparkles className="h-4 w-4" />
               Buscar novos leads
@@ -208,7 +249,16 @@ export default function CrmPage() {
                 {items.length === 0 ? (
                   <EmptyColumn isFirst={i === 0} onSearch={() => setSearchOpen(true)} />
                 ) : (
-                  items.map((l) => <LeadCard key={l.id} lead={l} onOpen={() => setActive(l)} />)
+                  items.map((l) => (
+                    <LeadCard
+                      key={l.id}
+                      lead={l}
+                      onOpen={() => setActive(l)}
+                      modoRota={modoRota}
+                      selecionado={selecionados.has(l.id)}
+                      onToggleSelecionado={() => toggleSelecionado(l.id)}
+                    />
+                  ))
                 )}
               </KanbanColumn>
             );
@@ -220,6 +270,18 @@ export default function CrmPage() {
             <Plus className="h-5 w-5" />
             <span className="text-sm font-medium">Nova etapa</span>
           </button>
+        </div>
+      )}
+
+      {modoRota && (
+        <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-xl">
+          <span className="text-sm font-medium text-foreground">
+            {selecionados.size} lead{selecionados.size !== 1 ? "s" : ""} selecionado{selecionados.size !== 1 ? "s" : ""}
+          </span>
+          <Button size="sm" variant="ghost" onClick={cancelarModoRota}>Cancelar</Button>
+          <Button size="sm" disabled={selecionados.size < 2} onClick={tracarRota} className="gap-2 bg-primary hover:bg-[var(--primary-hover)]">
+            <Route className="h-3.5 w-3.5" />Traçar rota
+          </Button>
         </div>
       )}
 
@@ -304,19 +366,38 @@ function KanbanColumn({
   );
 }
 
-function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
+function LeadCard({
+  lead, onOpen, modoRota, selecionado, onToggleSelecionado,
+}: {
+  lead: Lead; onOpen: () => void;
+  modoRota?: boolean; selecionado?: boolean; onToggleSelecionado?: () => void;
+}) {
   const badge = scoreBadge(lead.score);
   return (
-    <button
-      onClick={onOpen}
-      draggable
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => (modoRota ? onToggleSelecionado?.() : onOpen())}
+      onKeyDown={(e) => { if (e.key === "Enter") (modoRota ? onToggleSelecionado?.() : onOpen()); }}
+      draggable={!modoRota}
       onDragStart={(e) => e.dataTransfer.setData("text/lead-id", lead.id)}
-      className="w-full text-left rounded-xl border border-border bg-card p-3.5 shadow-sm hover:border-[var(--gold)]/40 hover:shadow-md transition-all cursor-grab active:cursor-grabbing"
+      className={`w-full text-left rounded-xl border p-3.5 shadow-sm hover:shadow-md transition-all ${
+        modoRota ? "cursor-pointer" : "cursor-grab active:cursor-grabbing"
+      } ${
+        selecionado ? "border-[var(--gold)] ring-2 ring-[var(--gold)]/30" : "border-border hover:border-[var(--gold)]/40"
+      }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="font-semibold text-sm text-foreground truncate">{lead.empresa}</div>
-          <div className="text-xs text-muted-foreground truncate mt-0.5">{lead.contato}</div>
+        <div className="min-w-0 flex items-start gap-2">
+          {modoRota && (
+            <div onClick={(e) => e.stopPropagation()}>
+              <Checkbox checked={selecionado} className="mt-0.5 shrink-0" onCheckedChange={() => onToggleSelecionado?.()} />
+            </div>
+          )}
+          <div className="min-w-0">
+            <div className="font-semibold text-sm text-foreground truncate">{lead.empresa}</div>
+            <div className="text-xs text-muted-foreground truncate mt-0.5">{lead.contato}</div>
+          </div>
         </div>
       </div>
       <div className="mt-2.5 flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -346,7 +427,7 @@ function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
           </span>
         </div>
       )}
-    </button>
+    </div>
   );
 }
 
