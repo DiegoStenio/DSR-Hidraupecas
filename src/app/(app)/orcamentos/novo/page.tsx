@@ -59,8 +59,9 @@ function NovoOrcamentoForm() {
   const [groupUnitPrice, setGroupUnitPrice] = useState(0);
   const [groupUnitPriceInput, setGroupUnitPriceInput] = useState("");
 
+  const [descontoTipo, setDescontoTipo] = useState<"valor" | "percentual">("valor");
   const [descontoInput, setDescontoInput] = useState("");
-  const [desconto, setDesconto] = useState(0);
+  const [descontoPercentInput, setDescontoPercentInput] = useState("");
   const [observacao, setObservacao] = useState("");
 
   const [planoId, setPlanoId] = useState<string>("");
@@ -90,7 +91,7 @@ function NovoOrcamentoForm() {
         setGroupQuantityInput(String(orc.group_quantity ?? 1));
         setGroupUnitPrice(orc.group_unit_price ?? 0);
         setGroupUnitPriceInput(orc.group_unit_price ? formatBRL(orc.group_unit_price) : "");
-        setDesconto(orc.desconto);
+        setDescontoTipo("valor");
         setDescontoInput(orc.desconto > 0 ? formatBRL(orc.desconto) : "");
         setObservacao(orc.observacao ?? "");
         const plano = orc.plano_id
@@ -113,6 +114,8 @@ function NovoOrcamentoForm() {
   }, [planoSelecionado]);
 
   const subtotal = budgetType === "group" ? groupUnitPrice * groupQuantity : items.reduce((s, i) => s + i.valor, 0);
+  const descontoPercent = Math.min(100, Math.max(0, parseBRL(descontoPercentInput)));
+  const desconto = descontoTipo === "percentual" ? subtotal * (descontoPercent / 100) : parseBRL(descontoInput);
   const total = Math.max(0, subtotal - desconto);
 
   const handleValorChange = (raw: string, setVal: (n: number) => void, setInput: (s: string) => void) => {
@@ -121,6 +124,12 @@ function NovoOrcamentoForm() {
     const final = parts.length > 2 ? `${parts[0]},${parts.slice(1).join("")}` : sanitized;
     setInput(final);
     setVal(parseBRL(final));
+  };
+
+  const handlePercentChange = (raw: string) => {
+    const sanitized = raw.replace(/[^0-9,]/g, "");
+    const parts = sanitized.split(",");
+    setDescontoPercentInput(parts.length > 2 ? `${parts[0]},${parts.slice(1).join("")}` : sanitized);
   };
 
   const handleAddItem = () => {
@@ -350,9 +359,46 @@ function NovoOrcamentoForm() {
               </>
             )}
             <div className="flex justify-between items-center text-sm font-medium text-muted-foreground">
-              <Label htmlFor="desconto" className="flex items-center gap-2 cursor-pointer"><TicketPercent className="h-4 w-4" />Desconto (R$)</Label>
-              <Input id="desconto" value={descontoInput} onChange={(e) => handleValorChange(e.target.value, setDesconto, setDescontoInput)} onBlur={() => setDescontoInput(desconto > 0 ? formatBRL(desconto) : "")} className="max-w-[120px] text-right" placeholder="0,00" />
+              <Label htmlFor="desconto" className="flex items-center gap-2 cursor-pointer"><TicketPercent className="h-4 w-4" />Desconto</Label>
+              <div className="flex items-center gap-2">
+                <div className="flex rounded-lg bg-muted p-0.5 text-xs font-semibold">
+                  {(["valor", "percentual"] as const).map(t => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setDescontoTipo(t)}
+                      className={`px-2.5 py-1 rounded-md transition-colors ${
+                        descontoTipo === t ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+                      }`}
+                    >
+                      {t === "valor" ? "R$" : "%"}
+                    </button>
+                  ))}
+                </div>
+                {descontoTipo === "valor" ? (
+                  <Input
+                    id="desconto"
+                    value={descontoInput}
+                    onChange={(e) => handleValorChange(e.target.value, () => {}, setDescontoInput)}
+                    onBlur={() => setDescontoInput(parseBRL(descontoInput) > 0 ? formatBRL(parseBRL(descontoInput)) : "")}
+                    className="max-w-[110px] text-right"
+                    placeholder="0,00"
+                  />
+                ) : (
+                  <Input
+                    id="desconto"
+                    value={descontoPercentInput}
+                    onChange={(e) => handlePercentChange(e.target.value)}
+                    onBlur={() => setDescontoPercentInput(descontoPercent > 0 ? formatBRL(descontoPercent) : "")}
+                    className="max-w-[80px] text-right"
+                    placeholder="0"
+                  />
+                )}
+              </div>
             </div>
+            {descontoTipo === "percentual" && desconto > 0 && (
+              <div className="flex justify-end -mt-2 text-xs text-muted-foreground">equivale a {fmt(desconto)}</div>
+            )}
             <div className="flex justify-between items-center text-lg font-semibold text-foreground">
               <span>Total</span><span className="font-display">{fmt(total)}</span>
             </div>
