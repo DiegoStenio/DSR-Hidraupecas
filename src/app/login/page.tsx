@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
@@ -80,9 +81,9 @@ export default function LoginPage() {
                 <label className="text-xs font-medium uppercase tracking-wider text-[#5b6472]">
                   Senha
                 </label>
-                <a href="#" className="text-xs font-medium text-[#0b1f3a] hover:text-[#c9a227] transition-colors dark:text-white/80">
+                <Link href="/recuperar-senha" className="text-xs font-medium text-[#0b1f3a] hover:text-[#c9a227] transition-colors dark:text-white/80">
                   Esqueci minha senha
-                </a>
+                </Link>
               </div>
               <div className="mt-1.5 relative">
                 <input
