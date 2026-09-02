@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, Plus, Building2, User, Sparkles, AlertTriangle, TrendingUp, FileText, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Search, Plus, Upload, Building2, User, Sparkles, AlertTriangle, TrendingUp, FileText, Pencil, Trash2, Loader2 } from "lucide-react";
+import { ImportarClientesDialog } from "@/components/app/importar-clientes-dialog";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,6 +53,7 @@ export default function ClientesPage() {
   const [creating, setCreating] = useState(false);
   const [viewing, setViewing] = useState<Cliente | null>(null);
   const [deleting, setDeleting] = useState<Cliente | null>(null);
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     supabase
@@ -111,9 +113,14 @@ export default function ClientesPage() {
         title="Clientes"
         subtitle={loading ? "Carregando…" : `${list.length} cadastrados · busque por nome, CPF/CNPJ ou telefone`}
         actions={
-          <Button onClick={() => setCreating(true)} className="gap-2 bg-primary hover:bg-[var(--primary-hover)]">
-            <Plus className="h-4 w-4" /> Adicionar cliente
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setImporting(true)} className="gap-2">
+              <Upload className="h-4 w-4" /> Importar Excel
+            </Button>
+            <Button onClick={() => setCreating(true)} className="gap-2 bg-primary hover:bg-[var(--primary-hover)]">
+              <Plus className="h-4 w-4" /> Adicionar cliente
+            </Button>
+          </div>
         }
       />
 
@@ -205,6 +212,15 @@ export default function ClientesPage() {
         cliente={editing}
         onClose={() => { setCreating(false); setEditing(null); }}
         onSave={handleSave}
+      />
+
+      <ImportarClientesDialog
+        open={importing}
+        onClose={() => setImporting(false)}
+        onImportado={(novos) => {
+          setList(l => [...novos, ...l]);
+          toast.success(`${novos.length} cliente(s) importado(s)`);
+        }}
       />
 
       <ClienteViewDialog
