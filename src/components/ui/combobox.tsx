@@ -54,9 +54,9 @@ export function Combobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between"
+          className="w-full justify-between overflow-hidden"
         >
-          <div className="truncate">
+          <div className="truncate min-w-0">
             {value
               ? selectedOption?.label
               : placeholder}
