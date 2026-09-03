@@ -106,6 +106,7 @@ export type Lead = {
   categoria: string | null;
   lat: number | null;
   lng: number | null;
+  google_maps_url: string | null;
   etapa_id: string;
   arquivado: boolean;
   score: LeadScore | null;

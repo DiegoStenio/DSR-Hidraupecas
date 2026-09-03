@@ -694,7 +694,7 @@ function LeadDrawer({
             />
             <InfoCell
               icon={MapPin} label="Endereço" value={lead.endereco ?? "—"}
-              href={lead.endereco ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lead.endereco)}` : undefined}
+              href={lead.google_maps_url ?? (lead.endereco ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lead.endereco)}` : undefined)}
             />
             {lead.avaliacao && (
               <InfoCell icon={Star} label="Avaliação" value={`${lead.avaliacao.toFixed(1)} / 5`} />
