@@ -178,13 +178,24 @@ function NovoOrcamentoForm() {
       installments_count: planoSelecionado && planoSelecionado.parcelas > 1 ? installmentsCount : null,
     };
 
-    const { data, error } = isEdit
-      ? await supabase.from("orcamentos").update(payload).eq("id", orcamentoId!).select().single()
-      : await supabase.from("orcamentos").insert({
+    let data: any = null;
+    let error: { message: string } | null = null;
+    if (isEdit) {
+      ({ data, error } = await supabase.from("orcamentos").update(payload).eq("id", orcamentoId!).select().single());
+    } else {
+      // Numeração sequencial DSR-0001, DSR-0002... (continua dos orçamentos importados).
+      // Em caso de colisão (duas pessoas salvando ao mesmo tempo), tenta o próximo número.
+      const { data: ultimo } = await supabase.from("orcamentos").select("numero").like("numero", "DSR-%").order("numero", { ascending: false }).limit(1);
+      let seq = (parseInt(ultimo?.[0]?.numero?.replace(/\D/g, "") ?? "0", 10) || 0) + 1;
+      for (let tentativa = 0; tentativa < 5; tentativa++, seq++) {
+        ({ data, error } = await supabase.from("orcamentos").insert({
           ...payload,
-          numero: `ORC-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`,
+          numero: `DSR-${String(seq).padStart(4, "0")}`,
           data: new Date().toISOString().slice(0, 10),
-        }).select().single();
+        }).select().single());
+        if (!error || !/duplicate|unique/i.test(error.message)) break;
+      }
+    }
     setSaving(false);
 
     if (error) { toast.error("Erro ao salvar orçamento", { description: error.message }); janelaWhatsapp?.close(); return; }
