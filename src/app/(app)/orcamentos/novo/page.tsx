@@ -186,7 +186,8 @@ function NovoOrcamentoForm() {
       // Numeração sequencial DSR-0001, DSR-0002... (continua dos orçamentos importados).
       // Em caso de colisão (duas pessoas salvando ao mesmo tempo), tenta o próximo número.
       const { data: ultimo } = await supabase.from("orcamentos").select("numero").like("numero", "DSR-%").order("numero", { ascending: false }).limit(1);
-      let seq = (parseInt(ultimo?.[0]?.numero?.replace(/\D/g, "") ?? "0", 10) || 0) + 1;
+      // Piso 383: o último número do app antigo foi DSR-0382 (não reutilizar números já emitidos).
+      let seq = Math.max((parseInt(ultimo?.[0]?.numero?.replace(/\D/g, "") ?? "0", 10) || 0) + 1, 383);
       for (let tentativa = 0; tentativa < 5; tentativa++, seq++) {
         ({ data, error } = await supabase.from("orcamentos").insert({
           ...payload,
