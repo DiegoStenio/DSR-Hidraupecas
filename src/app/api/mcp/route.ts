@@ -243,6 +243,7 @@ const handler = createMcpHandler(
         })).min(1),
         desconto: z.number().optional().default(0),
         observacao: z.string().optional(),
+        titulo: z.string().optional().describe("Título do orçamento, exibido em destaque no PDF."),
       },
       async (input) => {
         const total = input.itens.reduce((s, it) => s + it.qtd * it.valor, 0) - (input.desconto ?? 0);
@@ -257,6 +258,7 @@ const handler = createMcpHandler(
           total,
           desconto: input.desconto ?? 0,
           observacao: input.observacao ?? null,
+          titulo: input.titulo ?? null,
           status: "pendente",
         }).select().single();
         if (error) return { content: [{ type: "text", text: `Erro: ${error.message}` }], isError: true };

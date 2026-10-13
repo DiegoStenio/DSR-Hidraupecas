@@ -62,6 +62,7 @@ function NovoOrcamentoForm() {
   const [descontoTipo, setDescontoTipo] = useState<"valor" | "percentual">("valor");
   const [descontoInput, setDescontoInput] = useState("");
   const [descontoPercentInput, setDescontoPercentInput] = useState("");
+  const [titulo, setTitulo] = useState("");
   const [observacao, setObservacao] = useState("");
 
   const [planoId, setPlanoId] = useState<string>("");
@@ -93,6 +94,7 @@ function NovoOrcamentoForm() {
         setGroupUnitPriceInput(orc.group_unit_price ? formatBRL(orc.group_unit_price) : "");
         setDescontoTipo("valor");
         setDescontoInput(orc.desconto > 0 ? formatBRL(orc.desconto) : "");
+        setTitulo(orc.titulo ?? "");
         setObservacao(orc.observacao ?? "");
         const plano = orc.plano_id
           ? p.data?.find(pl => pl.id === orc.plano_id)
@@ -174,6 +176,7 @@ function NovoOrcamentoForm() {
       budget_type: budgetType,
       group_unit_price: budgetType === "group" ? groupUnitPrice : null,
       group_quantity: budgetType === "group" ? groupQuantity : null,
+      titulo: titulo.trim() || null,
       observacao: observacao || null,
       installments_count: planoSelecionado && planoSelecionado.parcelas > 1 ? installmentsCount : null,
     };
@@ -258,6 +261,10 @@ function NovoOrcamentoForm() {
                   {vendedores.map(v => <SelectItem key={v.id} value={v.id}>{v.nome}</SelectItem>)}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="titulo">Título do orçamento <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+              <Input id="titulo" value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex: Orçamento para revisar comando hidráulico da retro B95-B" />
             </div>
           </CardContent>
         </Card>

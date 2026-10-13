@@ -76,6 +76,7 @@ export type Orcamento = {
   budget_type: "items" | "group";
   group_unit_price: number | null;
   group_quantity: number | null;
+  titulo: string | null;
   observacao: string | null;
   installments_count: number | null;
   created_at: string;

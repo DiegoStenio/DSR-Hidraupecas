@@ -75,6 +75,10 @@ export const OrcamentoPrintable = forwardRef<HTMLDivElement, Props>(function Orc
           </div>
         </div>
 
+        {orcamento.titulo && (
+          <p className="mb-4 text-center text-sm font-bold uppercase">{orcamento.titulo}</p>
+        )}
+
         <section className="mb-4">
           <h3 className="text-sm font-bold mb-2 border-b pb-1">SERVIÇOS</h3>
           <table className="w-full">
